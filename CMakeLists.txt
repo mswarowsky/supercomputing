@@ -10,6 +10,10 @@ find_package(OpenMP)
 include_directories(zeta)
 add_subdirectory(zeta)
 
+#mach libary
+include_directories(mach)
+add_subdirectory(mach)
+
 #all of zeta0
 add_subdirectory(zeta0)
 
