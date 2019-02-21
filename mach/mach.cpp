@@ -33,7 +33,9 @@ namespace mach {
         auto series_1 = singleMach(n, 1./5.);
         auto series_2 = singleMach(n, 1./239.);
 
-        return (4 * series_1 - series_2) * 4;
+        auto result = (4. * series_1 - series_2) * 4.;
+
+        return result;
     }
 }
 
