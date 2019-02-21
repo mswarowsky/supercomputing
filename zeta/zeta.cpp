@@ -3,7 +3,7 @@
 
 namespace zeta
 {
-    double zetaElement(int i){
+    double zetaElement(long i){
         return  1.0/ static_cast<double>(i * i);
     }
 
@@ -11,10 +11,10 @@ namespace zeta
         return sqrt(s * 6.0);
     }
 
-    double singleZeta(int n) {
+    double singleZeta(long n) {
         double zeta_series = 0.0;
 
-        for(int i = 1; i <= n; i++){
+        for(long i = 1; i <= n; i++){
             zeta_series += zeta::zetaElement(i);
         }
 

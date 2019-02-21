@@ -12,7 +12,7 @@ namespace mach {
      * @param x the input of the series, /in [-1,1]
      * @return the value of element with given index and input
      */
-    double machElement(int i, double x);
+    double machElement(long i, double x);
 
     /**
      * Compute the machin series over n elements for the given x.
@@ -20,14 +20,14 @@ namespace mach {
      * @param x
      * @return
      */
-    double singleMach(int n, double x);
+    double singleMach(long n, double x);
 
     /**
      * compute PI single threaded with the machin method
      * @param n number of series elements that should be used
      * @return
      */
-    double getPIMachSingleT(int n);
+    double getPIMachSingleT(long n);
 }
 
 #endif //PROJECT_1_MACH_H

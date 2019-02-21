@@ -10,7 +10,7 @@ namespace zeta {
  * @param i index of the series element
  * @return
  */
-    double zetaElement(int i);
+    double zetaElement(long i);
 
 /**
  * Get PI from a value of the zeta Series
@@ -25,7 +25,7 @@ namespace zeta {
      * @param n the number of steps
      * @return the value of the series
      */
-    double singleZeta(int n);
+    double singleZeta(long n);
 }
 
 
