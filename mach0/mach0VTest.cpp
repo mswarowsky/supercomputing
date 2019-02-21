@@ -1,20 +1,20 @@
 /**
- * Verification test for zeta
+ * Verification test for machin
  */
 
-#include <zeta.h>
 #include <iostream>
-#include <cmath>
 #include <fstream>
+#include <cmath>
+#include <mach.h>
 
 #define TEST_RUNS 24
 
 int main() {
     std::ofstream outPutFile;
-    outPutFile.open("zeta0VTest.txt");
+    outPutFile.open("mach0VTest.txt");
     for(long i = 1; i <= TEST_RUNS; i++){
         long n = (0x1 << i); //testing with n = 2^i
-        auto pi = zeta::getPIfromZetaSeries(zeta::singleZeta(n));
+        auto pi = mach::getPIMachSingleT(n);
         std::cout << "error PI - PI_" << n << " : " << fabs(M_PI - pi) << "\n";
         outPutFile << n << ";" << fabs(M_PI - pi) << "\n";
     }
