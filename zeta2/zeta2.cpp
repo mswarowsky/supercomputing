@@ -9,6 +9,8 @@
 #include <mpi.h>
 #include <vector>
 #include <numeric>
+#include <cassert>
+#include <fstream>
 
 int main(int argc, char *argv[]) {
 
@@ -24,6 +26,17 @@ int main(int argc, char *argv[]) {
     MPI_Init(&argc, &argv);
     MPI_Comm_size(MPI_COMM_WORLD, &size);
     MPI_Comm_rank(MPI_COMM_WORLD, &rank);
+
+    //we want power of 2 nodes
+    if((size & (size - 1)) != 0) {
+        std::cout << "Number of nodes must be a power of two\n";
+        return 1;
+    }
+
+    double time_start;
+    if (rank == 0) {
+        time_start = MPI_Wtime();
+    }
 
 
 
@@ -70,7 +83,12 @@ int main(int argc, char *argv[]) {
     //getting PI and printing it
     global_pi = zeta::getPIfromZetaSeries(global_pi);
     if(rank == 0){
-        std::cout << "Approximated PI: " << global_pi << "\n"<< "error: " << fabs(global_pi - M_PI) ;
+        double duration = MPI_Wtime() - time_start;
+        std::cout << "pi: " << global_pi << ", "<< "error: " << fabs(global_pi - M_PI) << ", duration: " << duration
+                  << std::endl ;
+        std::fstream outPutFile("zeta2.txt", std::ios::app);
+        outPutFile << size << ";" << global_pi << ";" << fabs(global_pi - M_PI) << ";" << duration << "\n";
+        outPutFile.close();
     }
 
     MPI_Finalize();
