@@ -21,12 +21,11 @@ int main(int argc, char *argv[]) {
     // Starting MPI
     int size, rank;
     MPI_Status status;
-    MPI_Init(&argc, & argv);
+    MPI_Init(&argc, &argv);
     MPI_Comm_size(MPI_COMM_WORLD, &size);
-    MPI_Comm_size(MPI_COMM_WORLD, &rank);
+    MPI_Comm_rank(MPI_COMM_WORLD, &rank);
 
 
-    std::cout << "rank: " << rank << std::endl;
 
     size_t n = std::strtoul(argv[1], nullptr, 0);
     if(rank == 0) {
@@ -67,8 +66,11 @@ int main(int argc, char *argv[]) {
     //sum up the scattered elements
     double local_pi = std::accumulate(part_v.begin(), part_v.end(), 0.0);
 
+
     double global_pi;
     MPI_Reduce(&local_pi, &global_pi, 1, MPI_DOUBLE, MPI_SUM, 0, MPI_COMM_WORLD);
+
+    global_pi = zeta::getPIfromZetaSeries(global_pi);
 
 
 
