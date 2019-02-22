@@ -3,14 +3,14 @@ project(Project_1)
 
 set(CMAKE_CXX_STANDARD 11)
 
-find_package(OpenMP)
+find_package(OpenMP REQUIRED)
+include_directories(${})
+set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${OpenMP_CXX_FLAGS}")
+
+
 find_package(MPI REQUIRED)
 include_directories(${MPI_CXX_INCLUDE_DIRS})
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${MPI_CXX_LINK_FLAGS} ${MPI_CXX_COMPILE_OPTIONS}")
-
-message("link: " ${MPI_CXX_LINK_FLAGS})
-message("compile options: " ${MPI_CXX_COMPILE_OPTIONS})
-message("compiler: " ${MPI_CXX__COMPILER})
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${MPI_CXX_LINK_FLAGS}")
 
 #zeta libary
 include_directories(zeta)
@@ -26,6 +26,7 @@ add_subdirectory(mach2)
 add_subdirectory(zeta0)
 add_subdirectory(zeta1)
 add_subdirectory(zeta2)
+add_subdirectory(zeta4)
 
 #all of mach0
 add_subdirectory(mach0)
