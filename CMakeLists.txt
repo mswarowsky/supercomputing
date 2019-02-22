@@ -19,6 +19,7 @@ add_subdirectory(zeta)
 #mach libary
 include_directories(mach)
 add_subdirectory(mach)
+add_subdirectory(mach1)
 
 #all the zeta programs
 add_subdirectory(zeta0)

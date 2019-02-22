@@ -33,9 +33,12 @@ namespace mach {
         double series_1 = singleMach(n, 1./5.);
         double series_2 = singleMach(n, 1./239.);
 
-        double result = (4. * series_1 - series_2) * 4.;
+        return getPIFromArctans(series_1, series_2);
 
-        return result;
+    }
+
+    double getPIFromArctans(double s_1, double s_2) {
+        return (4. * s_1 - s_2) * 4.;
     }
 }
 

@@ -28,6 +28,14 @@ namespace mach {
      * @return
      */
     double getPIMachSingleT(long n);
+
+    /**
+     * Calculates PI based on the the arctan(1/5) and the arctan(1/239)
+     * @param s_1 arctan(1/5)
+     * @param s_2 arctan(1/239)
+     * @return approximation of PI
+     */
+    double getPIFromArctans(double s_1, double s_2);
 }
 
 #endif //PROJECT_1_MACH_H
