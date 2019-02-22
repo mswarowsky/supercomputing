@@ -17,7 +17,7 @@ int main() {
 
     std::cout << "single element test - PASSED" << std::endl;
 
-    auto series = zeta::singleZeta(3);
+    double series = zeta::singleZeta(3);
     double s_3 = v_1 + v_2 + v_3;
     assert(fabs(series - s_3) <= EPSILON);
 
