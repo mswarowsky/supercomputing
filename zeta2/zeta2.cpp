@@ -9,7 +9,6 @@
 #include <mpi.h>
 #include <vector>
 #include <numeric>
-#include <cassert>
 #include <fstream>
 
 int main(int argc, char *argv[]) {
@@ -40,7 +39,7 @@ int main(int argc, char *argv[]) {
 
 
 
-    size_t n = std::strtoul(argv[1], nullptr, 0);
+    size_t n = strtoul(argv[1], nullptr, 0);
     if(rank == 0) {
         std::cout << "Using n = " << n << std::endl;
     }

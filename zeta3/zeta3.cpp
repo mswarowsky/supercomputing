@@ -13,7 +13,7 @@ int main(int argc, char *argv[]) {
         return 1;
     }
 
-    size_t n = std::strtoul(argv[1], nullptr, 0);
+    size_t n = strtoul(argv[1], nullptr, 0);
     std::cout << "Using n = " << n << std::endl;
 
     auto start = std::chrono::system_clock::now();
