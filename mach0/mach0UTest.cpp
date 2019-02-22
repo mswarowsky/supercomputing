@@ -2,7 +2,6 @@
 
 #include <limits>
 #include <cassert>
-#include <cmath>
 #include <iostream>
 
 #define EPSILON  std::numeric_limits<double>::epsilon()
@@ -28,12 +27,12 @@ int main() {
     std::cout << "single element test - PASSED" << std::endl;
 
     double series = v_1 + v_2 + v_3;
-    double test_series = mach::singleMach(3, x);
+    auto test_series = mach::singleMach(3, x);
     assert(fabs(series - test_series) <= EPSILON);
 
 
     double series_2 = h_1 + h_2  + h_3;
-    double test_series_2 = mach::singleMach(3, y);
+    auto test_series_2 = mach::singleMach(3, y);
     assert(fabs(series_2 - test_series_2) <= EPSILON);
 
     std::cout << "series test - PASSED" << std::endl;

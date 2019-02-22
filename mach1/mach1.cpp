@@ -26,7 +26,7 @@ int main(int argc, char *argv[]) {
 
 
 
-    size_t n = strtoul(argv[1], nullptr, 0);
+    size_t n = std::strtoul(argv[1], nullptr, 0);
     if(rank == 0) {
         std::cout << "Using n = " << n << std::endl;
     }
@@ -81,7 +81,7 @@ int main(int argc, char *argv[]) {
     double global_arctan[2];
     MPI_Reduce(&local_arctan, &global_arctan, 2, MPI_DOUBLE, MPI_SUM, 0, MPI_COMM_WORLD);
 
-    double global_pi = mach::getPIFromArctans(global_arctan[0],global_arctan[1]);
+    auto global_pi = mach::getPIFromArctans(global_arctan[0],global_arctan[1]);
 
 
     if(rank == 0){
