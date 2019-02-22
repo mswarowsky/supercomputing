@@ -26,6 +26,7 @@ add_subdirectory(mach2)
 add_subdirectory(zeta0)
 add_subdirectory(zeta1)
 add_subdirectory(zeta2)
+add_subdirectory(zeta3)
 add_subdirectory(zeta4)
 
 #all of mach0

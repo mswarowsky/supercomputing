@@ -87,7 +87,7 @@ int main(int argc, char *argv[]) {
         std::cout << "pi: " << global_pi << ", "<< "error: " << fabs(global_pi - M_PI) << ", duration: " << duration
                   << std::endl ;
         std::fstream outPutFile("zeta2.txt", std::ios::app);
-        outPutFile << size << ";" << global_pi << ";" << fabs(global_pi - M_PI) << ";" << duration << "\n";
+        outPutFile << size << ";" << n << ";" << global_pi << ";" << fabs(global_pi - M_PI) << ";" << duration << "\n";
         outPutFile.close();
     }
 
