@@ -20,6 +20,7 @@ add_subdirectory(zeta)
 include_directories(mach)
 add_subdirectory(mach)
 add_subdirectory(mach1)
+add_subdirectory(mach2)
 
 #all the zeta programs
 add_subdirectory(zeta0)
