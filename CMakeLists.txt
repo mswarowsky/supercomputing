@@ -19,8 +19,7 @@ add_subdirectory(zeta)
 #mach libary
 include_directories(mach)
 add_subdirectory(mach)
-add_subdirectory(mach1)
-add_subdirectory(mach2)
+
 
 #all the zeta programs
 add_subdirectory(zeta0)
@@ -29,6 +28,8 @@ add_subdirectory(zeta2)
 add_subdirectory(zeta3)
 add_subdirectory(zeta4)
 
-#all of mach0
+#all the machin programs
 add_subdirectory(mach0)
-
+add_subdirectory(mach1)
+add_subdirectory(mach2)
+add_subdirectory(mach3)
