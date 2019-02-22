@@ -1,8 +1,14 @@
+/**
+ * An MPI implementation where MPI is used a little bit smarter
+ */
+
+
 #include <zeta.h>
 #include <iostream>
 #include <cmath>
 #include <mpi.h>
 #include <vector>
+#include <numeric>
 
 int main(int argc, char *argv[]) {
 
@@ -11,47 +17,60 @@ int main(int argc, char *argv[]) {
         return 1;
     }
 
-    size_t n = std::strtoul(argv[1], nullptr, 0);
-    std::cout << "Using n = " << n << std::endl;
 
     // Starting MPI
     int size, rank;
     MPI_Status status;
-    MPI_Init(&argc, & argv);
+    MPI_Init(&argc, &argv);
     MPI_Comm_size(MPI_COMM_WORLD, &size);
-    MPI_Comm_size(MPI_COMM_WORLD, &rank);
+    MPI_Comm_rank(MPI_COMM_WORLD, &rank);
 
 
 
-    // compute the vector elements
-    std::vector<double> v;
-    v.reserve(n);   //to allocate already all memory needed
-
-    for(size_t i = 1; i < n; i++) {
-        v.emplace_back(i);
+    size_t n = std::strtoul(argv[1], nullptr, 0);
+    if(rank == 0) {
+        std::cout << "Using n = " << n << std::endl;
     }
 
 
-    //share the elements use process 0 to share and collect all elements
-    int chunk = static_cast<int>(n / size); // number of elements for each process
-    std::vector<double> part_v;
-    part_v.reserve(static_cast<size_t>(chunk));
+
+    // To some calculation for splitting the data
+    size_t chunk;
+    if((size > 1) && (n % size != 0)){
+        chunk = n / (size - 1);
+    } else {
+        chunk = n / size;
+    }
+
+
+
 
     if(rank == 0){
         std::cout << "Sending elements to " << size << " other processes.\n";
     }
-    //TODO handle the case that the n is not a multiple of size
-    MPI_Scatter(v.data(), chunk, MPI_DOUBLE, part_v.data(), chunk, MPI_DOUBLE, 0, MPI_COMM_WORLD);
+    //computing the dat on each node add creating the partial sum
+    std::vector<double> local_v;
+    local_v.resize(chunk);
 
-    //TODO compute zeta partial sum here
+    //starting the series at 1 but the index is starting at 0, so adding +1 in for the zeta element
+    size_t offset = chunk * rank + 1;
+    for(size_t i = 0; i < chunk; i++) {
+        local_v.at(i) = zeta::zetaElement(i + offset);
+    }
 
-    // gather and reduce the elements summed together
-    double approx_pi;
-    MPI_Reduce(part_v.data(), &approx_pi, 1, MPI_DOUBLE, MPI_SUM, 0, MPI_COMM_WORLD);
+    //sum up the scattered elements
+    double local_pi = std::accumulate(local_v.begin(), local_v.end(), 0.0);
 
 
+
+    //Collecting the data on the root(0) node
+    double global_pi;
+    MPI_Reduce(&local_pi, &global_pi, 1, MPI_DOUBLE, MPI_SUM, 0, MPI_COMM_WORLD);
+
+    //getting PI and printing it
+    global_pi = zeta::getPIfromZetaSeries(global_pi);
     if(rank == 0){
-        std::cout << "Approximated PI: " << approx_pi << "\n"<< "error: " << fabs(approx_pi - M_PI) ;
+        std::cout << "Approximated PI: " << global_pi << "\n"<< "error: " << fabs(global_pi - M_PI) ;
     }
 
     MPI_Finalize();
