@@ -9,6 +9,8 @@
 #include <vector>
 #include <numeric>
 #include <fstream>
+#include <omp.h>
+
 
 int main(int argc, char *argv[]) {
 
@@ -91,7 +93,7 @@ int main(int argc, char *argv[]) {
         std::cout << "pi: " << global_pi << ", "<< "error: " << fabs(global_pi - M_PI) << ", duration: " << duration
                   << std::endl ;
         std::fstream outPutFile("mach4.txt", std::ios::app);
-        outPutFile << size << ";" << n << ";"<< global_pi << ";" << fabs(global_pi - M_PI) << ";" << duration << "\n";
+        outPutFile << size << ";" << omp_get_num_threads() << ";" << n << ";"<< global_pi << ";" << fabs(global_pi - M_PI) << ";" << duration << "\n";
         outPutFile.close();
     }
 
