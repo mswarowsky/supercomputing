@@ -85,9 +85,10 @@ int main(int argc, char *argv[]) {
     double global_arctan[2];
     MPI_Reduce(&local_arctan, &global_arctan, 2, MPI_DOUBLE, MPI_SUM, 0, MPI_COMM_WORLD);
 
-    //getting PI and printing it
-    auto global_pi = mach::getPIFromArctans(global_arctan[0], global_arctan[1]);
+    
     if(rank == 0){
+        //getting PI and printing it
+        auto global_pi = mach::getPIFromArctans(global_arctan[0], global_arctan[1]);
         double duration = MPI_Wtime() - time_start;
         std::cout << "pi: " << global_pi << ", "<< "error: " << fabs(global_pi - M_PI) << ", duration: " << duration
                   << std::endl ;

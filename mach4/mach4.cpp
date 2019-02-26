@@ -54,7 +54,6 @@ int main(int argc, char *argv[]) {
     }
 
 
-
     if(rank == 0){
         std::cout << "Sending elements to " << size << " other processes.\n";
     }
@@ -73,10 +72,11 @@ int main(int argc, char *argv[]) {
 
     //static schedule as we expect equal runtime for each element
 #pragma omp parallel for reduction(+:series_1) reduction(+:series_2) schedule(static)
-    for(long i = 1; i <= n; i++){
-        series_1 += mach::machElement(i, x);
-        series_2 += mach::machElement(i, y);
+    for(size_t i = 0; i < chunk; i++){
+        series_1 += mach::machElement(i + offset, x);
+        series_2 += mach::machElement(i + offset, y);
     }
+
 
     double local_arctan[2] = {series_1, series_2};
 
@@ -85,8 +85,8 @@ int main(int argc, char *argv[]) {
     MPI_Reduce(&local_arctan, &global_arctan, 2, MPI_DOUBLE, MPI_SUM, 0, MPI_COMM_WORLD);
 
     //getting PI and printing it
-    auto global_pi = mach::getPIFromArctans(global_arctan[0], global_arctan[1]);
     if(rank == 0){
+        auto global_pi = mach::getPIFromArctans(global_arctan[0], global_arctan[1]);
         double duration = MPI_Wtime() - time_start;
         std::cout << "pi: " << global_pi << ", "<< "error: " << fabs(global_pi - M_PI) << ", duration: " << duration
                   << std::endl ;
