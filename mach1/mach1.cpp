@@ -64,24 +64,16 @@ int main(int argc, char *argv[]) {
     if(rank == 0){
         std::cout << "Sending elements to " << size << " other processes.\n";
     }
-    //Splitting Data and sending it to all the processes
-    std::vector<double> part_v_1, part_v_2;
-    part_v_1.resize(chunk);
-    part_v_2.resize(chunk);
-    MPI_Scatter(v_1.data(), static_cast<int>(chunk), MPI_DOUBLE, part_v_1.data(), static_cast<int>(chunk), MPI_DOUBLE, 0, MPI_COMM_WORLD);
-    MPI_Scatter(v_2.data(), static_cast<int>(chunk), MPI_DOUBLE, part_v_2.data(), static_cast<int>(chunk), MPI_DOUBLE, 0, MPI_COMM_WORLD);
+    MPI_Bcast(v_1.data(), static_cast<int>(n), MPI_DOUBLE, 0, MPI_COMM_WORLD);
+    MPI_Bcast(v_2.data(), static_cast<int>(n), MPI_DOUBLE, 0, MPI_COMM_WORLD);
 
-
-
+    
     //sum up the scattered elements
-    double local_arctan[2];
-    local_arctan[0] = std::accumulate(part_v_1.begin(), part_v_1.end(), 0.0);
-    local_arctan[1] = std::accumulate(part_v_2.begin(), part_v_2.end(), 0.0);
+    double arctan[2];
+    arctan[0] = std::accumulate(v_1.begin(), v_1.end(), 0.0);
+    arctan[1] = std::accumulate(v_2.begin(), v_2.end(), 0.0);
 
-    double global_arctan[2];
-    MPI_Reduce(&local_arctan, &global_arctan, 2, MPI_DOUBLE, MPI_SUM, 0, MPI_COMM_WORLD);
-
-    auto global_pi = mach::getPIFromArctans(global_arctan[0],global_arctan[1]);
+    auto global_pi = mach::getPIFromArctans(arctan[0],arctan[1]);
 
 
     if(rank == 0){

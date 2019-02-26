@@ -58,24 +58,14 @@ int main(int argc, char *argv[]) {
         std::cout << "Sending elements to " << size << " other processes.\n";
     }
     //Splitting Data and sending it to all the processes
-    std::vector<double> part_v;
-    part_v.resize(chunk);
-    MPI_Scatter(v.data(), static_cast<int>(chunk), MPI_DOUBLE, part_v.data(), static_cast<int>(chunk), MPI_DOUBLE, 0, MPI_COMM_WORLD);
-
-
+    MPI_Bcast(v.data(), static_cast<int >(n), MPI_DOUBLE, 0 , MPI_COMM_WORLD);
+    
     //sum up the scattered elements
-    double local_pi = std::accumulate(part_v.begin(), part_v.end(), 0.0);
-
-
-    double global_pi;
-    MPI_Reduce(&local_pi, &global_pi, 1, MPI_DOUBLE, MPI_SUM, 0, MPI_COMM_WORLD);
-
-    global_pi = zeta::getPIfromZetaSeries(global_pi);
-
-
-
+    double pi = std::accumulate(v.begin(), v.end(), 0.0);
+    pi = zeta::getPIfromZetaSeries(pi);
+    
     if(rank == 0){
-        std::cout << "Approximated PI: " << global_pi << "\n"<< "error: " << fabs(global_pi - M_PI) ;
+        std::cout << "Approximated PI: " << pi << "\n"<< "error: " << fabs(pi - M_PI) ;
     }
 
     MPI_Finalize();
