@@ -83,7 +83,7 @@ int main(int argc, char *argv[]) {
     if(rank == 0){
         double duration = MPI_Wtime() - time_start;
         std::cout << "pi: " << global_pi << ", "<< "error: " << fabs(global_pi - M_PI) << ", duration: " << duration
-                  << std::endl ;
+                  << "nodes:" << size << std::endl ;
         std::fstream outPutFile("zeta4.txt", std::ios::app);
         outPutFile << size << ";" << n << ";"<< global_pi << ";" << fabs(global_pi - M_PI) << ";" << duration << "\n";
         outPutFile.close();
