@@ -16,6 +16,7 @@ int main(int argc, char *argv[]) {
     size_t n = std::strtoul(argv[1], nullptr, 0);
     std::cout << "Using n = " << n << std::endl;
 
+
     auto start = std::chrono::system_clock::now();
 
     double approx_pi = 0.0;
@@ -28,8 +29,8 @@ int main(int argc, char *argv[]) {
     approx_pi = zeta::getPIfromZetaSeries(approx_pi);
 
     auto duration = std::chrono::duration_cast<std::chrono::microseconds>( std::chrono::system_clock::now() - start);
-    std::cout << "pi: " << approx_pi << ", "<< "error: " << fabs(approx_pi - M_PI) << ", duration: " << duration.count() << "us"
-            << std::endl ;
+    std::cout << "p:" << omp_get_num_procs() << " t:" << omp_get_num_threads() << " pi: " << approx_pi << ", "<< "error: " << fabs(approx_pi - M_PI)
+              << ", duration: " << duration.count() << "us" << std::endl ;
     std::fstream outPutFile("zeta3.txt", std::ios::app);
     outPutFile << omp_get_num_procs() << ";" << n << ";"<< omp_get_num_threads() << ";" << fabs(approx_pi - M_PI) << ";" << duration.count() << "\n";
     outPutFile.close();
