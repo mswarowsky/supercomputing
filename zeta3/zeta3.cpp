@@ -31,7 +31,7 @@ int main(int argc, char *argv[]) {
     std::cout << "pi: " << approx_pi << ", "<< "error: " << fabs(approx_pi - M_PI) << ", duration: " << duration.count() << "us"
             << std::endl ;
     std::fstream outPutFile("zeta3.txt", std::ios::app);
-    outPutFile << omp_get_num_threads() << ";" << n << ";"<< approx_pi << ";" << fabs(approx_pi - M_PI) << ";" << duration.count() << "\n";
+    outPutFile << omp_get_num_procs() << ";" << n << ";"<< omp_get_num_threads() << ";" << fabs(approx_pi - M_PI) << ";" << duration.count() << "\n";
     outPutFile.close();
 
     return 0;
