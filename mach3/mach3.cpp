@@ -34,7 +34,7 @@ int main(int argc, char *argv[]) {
 
     auto approx_pi = mach::getPIFromArctans(series_1, series_2);
 
-    auto duration = std::chrono::duration_cast<std::chrono::milliseconds>( std::chrono::system_clock::now() - start);
+    auto duration = std::chrono::duration_cast<std::chrono::microseconds>( std::chrono::system_clock::now() - start);
     std::cout << "pi: " << approx_pi << ", "<< "error: " << fabs(approx_pi - M_PI) << ", duration: " << duration.count() << "ms"
               << std::endl ;
     std::fstream outPutFile("mach3.txt", std::ios::app);
