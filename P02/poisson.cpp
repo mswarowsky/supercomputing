@@ -11,7 +11,8 @@
 
 #include <stdlib.h>
 #include <stdio.h>
-#include <math.h>
+#include <cmath>
+#include <iostream>
 
 #define PI 3.14159265358979323846
 
@@ -28,14 +29,13 @@ real rhs(real x, real y);
 // mangling: if can differ with compilers.
 void fst_(real *v, int *n, real *w, int *nn);
 void fstinv_(real *v, int *n, real *w, int *nn);
+real poisson(size_t n);
 
-int main(int argc, char **argv)
+int main(int argc, char *argv[])
 {
     if (argc < 2) {
-        printf("Usage:\n");
-        printf("  poisson n\n\n");
-        printf("Arguments:\n");
-        printf("  n: the problem size (must be a power of 2)\n");
+        std::cout << "Usage: \n poisson n\n\n"
+                  << "Arguments:\n  n: the problem size (must be a power of 2)" << std::endl;
         return 1;
     }
 
@@ -46,13 +46,30 @@ int main(int argc, char **argv)
      *  - the number of degrees of freedom in each direction is m = n-1,
      *  - the mesh size is constant h = 1/n.
      */
-    int n = atoi(argv[1]);
+    size_t n = std::strtoul(argv[1], nullptr, 0);
+
     if ((n & (n-1)) != 0) {
-        printf("n must be a power-of-two\n");
+        std::cout << "n must be a power-of-two\n" << std::endl;
         return 2;
     }
 
-    int m = n - 1;
+    //To the work in a separate function to make it testable
+    auto u_max = poisson(n);
+
+    std::cout << "u_max = " << u_max << std::endl;
+
+
+    return 0;
+}
+
+
+/**
+ * Solve the poisson problem
+ * @param n The problem size (must be power of 2)
+ * @return aximal value of solution for convergence analysis in L_\infty norm.
+ */
+real poisson(size_t n){
+    size_t m = n - 1;
     real h = 1.0 / n;
 
     /*
@@ -93,7 +110,7 @@ int main(int argc, char **argv)
      * The array is allocated once and passed as arguments to avoid doings
      * reallocations at each function call.
      */
-    int nn = 4 * n;
+    size_t nn = 4 * n;
     real *z = mk_1D_array(nn, false);
 
     /*
@@ -116,12 +133,14 @@ int main(int argc, char **argv)
      * In functions fst_ and fst_inv_ coefficients are written back to the input
      * array (first argument) so that the initial values are overwritten.
      */
+    int n_int = static_cast<int>(n);    // int cast for fortan code .... :(
+    int nn_int = static_cast<int>(nn);
     for (size_t i = 0; i < m; i++) {
-        fst_(b[i], &n, z, &nn);
+        fst_(b[i], &n_int, z, &nn_int);
     }
     transpose(bt, b, m);
     for (size_t i = 0; i < m; i++) {
-        fstinv_(bt[i], &n, z, &nn);
+        fstinv_(bt[i], &n_int, z, &nn_int);
     }
 
     /*
@@ -136,12 +155,14 @@ int main(int argc, char **argv)
     /*
      * Compute U = S^-1 * (S * Utilde^T) (Chapter 9. page 101 step 3)
      */
+    n_int = static_cast<int>(n);    // int cast for fortan code .... :(
+    nn_int = static_cast<int>(nn);
     for (size_t i = 0; i < m; i++) {
-        fst_(bt[i], &n, z, &nn);
+        fst_(bt[i], &n_int, z, &nn_int);
     }
     transpose(b, bt, m);
     for (size_t i = 0; i < m; i++) {
-        fstinv_(b[i], &n, z, &nn);
+        fstinv_(b[i], &n_int, z, &nn_int);
     }
 
     /*
@@ -155,26 +176,23 @@ int main(int argc, char **argv)
         }
     }
 
-    printf("u_max = %e\n", u_max);
 
-    return 0;
+    return u_max;
 }
 
-/*
+/**
  * This function is used for initializing the right-hand side of the equation.
  * Other functions can be defined to swtich between problem definitions.
  */
-
 real rhs(real x, real y) {
     return 1;
 }
 
-/*
+/**
  * Write the transpose of b a matrix of R^(m*m) in bt.
  * In parallel the function MPI_Alltoallv is used to map directly the entries
  * stored in the array to the block structure, using displacement arrays.
  */
-
 void transpose(real **bt, real **b, size_t m)
 {
     for (size_t i = 0; i < m; i++) {
@@ -184,11 +202,10 @@ void transpose(real **bt, real **b, size_t m)
     }
 }
 
-/*
+/**
  * The allocation of a vectore of size n is done with just allocating an array.
  * The only thing to notice here is the use of calloc to zero the array.
  */
-
 real *mk_1D_array(size_t n, bool zero)
 {
     if (zero) {
@@ -197,7 +214,7 @@ real *mk_1D_array(size_t n, bool zero)
     return (real *)malloc(n * sizeof(real));
 }
 
-/*
+/**
  * The allocation of the two-dimensional array used for storing matrices is done
  * in the following way for a matrix in R^(n1*n2):
  * 1. an array of pointers is allocated, one pointer for each row,
@@ -205,7 +222,6 @@ real *mk_1D_array(size_t n, bool zero)
  *   is contigusous,
  * 3. pointers are set for each row to the address of first element.
  */
-
 real **mk_2D_array(size_t n1, size_t n2, bool zero)
 {
     // 1
