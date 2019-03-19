@@ -23,7 +23,7 @@ typedef int bool;
 // Function prototypes
 real *mk_1D_array(size_t n, bool zero);
 real **mk_2D_array(size_t n1, size_t n2, bool zero);
-void transpose(real **bt, real **b, size_t m);
+void transpose_c(real **bt, real **b, size_t m);
 real one_function(real x, real y);
 
 // Functions implemented in FORTRAN in fst.f and called from C.
@@ -122,7 +122,7 @@ int main(int argc, char **argv)
     for (size_t i = 0; i < m; i++) {
         fst_(b[i], &n, z, &nn);
     }
-    transpose(bt, b, m);
+    transpose_c(bt, b, m);
     for (size_t i = 0; i < m; i++) {
         fstinv_(bt[i], &n, z, &nn);
     }
@@ -142,7 +142,7 @@ int main(int argc, char **argv)
     for (size_t i = 0; i < m; i++) {
         fst_(bt[i], &n, z, &nn);
     }
-    transpose(b, bt, m);
+    transpose_c(b, bt, m);
     for (size_t i = 0; i < m; i++) {
         fstinv_(b[i], &n, z, &nn);
     }
@@ -178,7 +178,7 @@ real one_function(real x, real y) {
  * stored in the array to the block structure, using displacement arrays.
  */
 
-void transpose(real **bt, real **b, size_t m)
+void transpose_c(real **bt, real **b, size_t m)
 {
     for (size_t i = 0; i < m; i++) {
         for (size_t j = 0; j < m; j++) {

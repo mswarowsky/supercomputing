@@ -19,12 +19,18 @@
 
 #define PI 3.14159265358979323846
 
+typedef std::vector<std::vector<double>> matrix;
 
 // Function prototypes
 double *mk_1D_array(size_t n, bool zero);
 double **mk_2D_array(size_t n1, size_t n2, bool zero);
-void transpose(double **bt, double **b, size_t m);
+void transpose_c(double **bt, double **b, size_t m);
+
 double one_function(double x, double y);
+matrix create_matrix(size_t rows, size_t columns);
+matrix transpose(const matrix &m);
+void transpose(matrix t, const matrix &m);
+
 
 
 // Functions implemented in FORTRAN in fst.f and called from C.
@@ -112,7 +118,8 @@ double poisson(const size_t n, const std::function<double(double, double)> &rhs_
      */
     double **b_c = mk_2D_array(m, m, false);
     double **bt_c = mk_2D_array(m, m, false);
-    matrix<double> b(m,m);
+//    matrix<double> b(m,m);
+    auto b = create_matrix(m, m);
 //    matrix<double> bt(m,m);
 
     /*
@@ -139,7 +146,7 @@ double poisson(const size_t n, const std::function<double(double, double)> &rhs_
      */
     for (size_t i = 0; i < m; i++) {
         for (size_t j = 0; j < m; j++) {
-            b.insert_element(i,j, h * h * rhs_function(grid.at(i+1), grid.at(j+1)));
+            b.at(i).at(j) =  h * h * rhs_function(grid.at(i+1), grid.at(j+1));
             b_c[i][j] = h * h * rhs_function(grid_c[i+1], grid_c[j+1]);
         }
     }
@@ -159,15 +166,13 @@ double poisson(const size_t n, const std::function<double(double, double)> &rhs_
     int nn_int = static_cast<int>(nn);
     for (size_t i = 0; i < m; i++) {
         fst_(b_c[i], &n_int, z_c, &nn_int);
-        matrix_row<matrix<double> > br (b, i);      //Thanks to fortran here is some ugly coping needed
-        std::vector<double> t(m);
-        std::copy(br.begin(), br.end(), t.begin());
-        fst_(t.data() , &n_int, z.data(), &nn_int);
+        fst_(b.at(i).data() , &n_int, z.data(), &nn_int);
     }
-    transpose(bt_c, b_c, m);
-    auto bt = trans(b);
+    transpose_c(bt_c, b_c, m);
+    auto bt = transpose(b);
     for (size_t i = 0; i < m; i++) {
         fstinv_(bt_c[i], &n_int, z_c, &nn_int);
+        fstinv_(bt.at(i).data(), &n_int, z.data(), &nn_int);
     }
 
     /*
@@ -176,35 +181,40 @@ double poisson(const size_t n, const std::function<double(double, double)> &rhs_
     for (size_t i = 0; i < m; i++) {
         for (size_t j = 0; j < m; j++) {
             bt_c[i][j] = bt_c[i][j] / (diag_c[i] + diag_c[j]);
+            bt.at(i).at(j) = bt.at(i).at(j) / (diag.at(i) + diag.at(j));
         }
     }
 
     /*
-     * Compute U = S^-1 * (S * Utilde^T) (Chapter 9. page 101 step 3)
+     * Compute U = S^-1 * (S * U \tilde^T) (Chapter 9. page 101 step 3)
      */
-    n_int = static_cast<int>(n);    // int cast for fortan code .... :(
-    nn_int = static_cast<int>(nn);
     for (size_t i = 0; i < m; i++) {
         fst_(bt_c[i], &n_int, z_c, &nn_int);
+        fst_(bt.at(i).data(), &n_int, z.data(), &nn_int);
     }
-    transpose(b_c, bt_c, m);
+    transpose_c(b_c, bt_c, m);
+    transpose(b, bt);
     for (size_t i = 0; i < m; i++) {
         fstinv_(b_c[i], &n_int, z_c, &nn_int);
+        fstinv_(b.at(i).data(), &n_int, z.data(), &nn_int);
     }
 
     /*
      * Compute maximal value of solution for convergence analysis in L_\infty
      * norm.
      */
+    double u_max_c = 0.0;
     double u_max = 0.0;
     for (size_t i = 0; i < m; i++) {
         for (size_t j = 0; j < m; j++) {
-            u_max = u_max > fabs(b_c[i][j]) ? u_max : fabs(b_c[i][j]);
-        }
+            u_max_c = u_max_c > fabs(b_c[i][j]) ? u_max_c : fabs(b_c[i][j]);
+            u_max = u_max > fabs(b.at(i).at(j)) ? u_max : fabs(b.at(i).at(j));}
     }
 
 
-    return u_max;
+    std::cout << "c++ u_max " << u_max << std::endl;
+
+    return u_max_c;
 }
 
 /**
@@ -220,7 +230,7 @@ double one_function(double x, double y) {
  * In parallel the function MPI_Alltoallv is used to map directly the entries
  * stored in the array to the block structure, using displacement arrays.
  */
-void transpose(double **bt, double **b, size_t m)
+void transpose_c(double **bt, double **b, size_t m)
 {
     for (size_t i = 0; i < m; i++) {
         for (size_t j = 0; j < m; j++) {
@@ -249,8 +259,7 @@ double *mk_1D_array(size_t n, bool zero)
  *   is contigusous,
  * 3. pointers are set for each row to the address of first element.
  */
-double **mk_2D_array(size_t n1, size_t n2, bool zero)
-{
+double **mk_2D_array(size_t n1, size_t n2, bool zero){
     // 1
     double **ret = (double **)malloc(n1 * sizeof(double *));
 
@@ -267,4 +276,28 @@ double **mk_2D_array(size_t n1, size_t n2, bool zero)
         ret[i] = ret[i-1] + n2;
     }
     return ret;
+}
+
+matrix create_matrix(const size_t rows,const size_t columns){
+    auto m = matrix(rows);
+    for(auto &r : m){
+        r = std::vector<double>(columns);
+    }
+    return m;
+}
+
+matrix transpose(const matrix &m){
+    assert(m.size() > 0);
+    matrix t = create_matrix(m.at(0).size(), m.size());
+
+    transpose(t, m);
+    return t;
+}
+
+void transpose(matrix t, const matrix &m){
+    for (size_t i = 0; i < m.at(0).size(); i++) {
+        for (size_t j = 0; j < m.size(); j++) {
+            t.at(i).at(j) = m.at(j).at(i);
+        }
+    }
 }
