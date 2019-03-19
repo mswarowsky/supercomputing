@@ -24,7 +24,7 @@ typedef int bool;
 real *mk_1D_array(size_t n, bool zero);
 real **mk_2D_array(size_t n1, size_t n2, bool zero);
 void transpose(real **bt, real **b, size_t m);
-real rhs(real x, real y);
+real one_function(real x, real y);
 
 // Functions implemented in FORTRAN in fst.f and called from C.
 // The trailing underscore comes from a convention for symbol names, called name
@@ -105,7 +105,7 @@ int main(int argc, char **argv)
      */
     for (size_t i = 0; i < m; i++) {
         for (size_t j = 0; j < m; j++) {
-            b[i][j] = h * h * rhs(grid[i+1], grid[j+1]);
+            b[i][j] = h * h * one_function(grid[i + 1], grid[j + 1]);
         }
     }
 
@@ -168,7 +168,7 @@ int main(int argc, char **argv)
  * Other functions can be defined to swtich between problem definitions.
  */
 
-real rhs(real x, real y) {
+real one_function(real x, real y) {
     return 1;
 }
 

@@ -38,6 +38,14 @@ if(ENABLE_OPENMP)
 endif()
 
 
+find_package(Boost REQUIRED)
+if(BOOST_FOUND)
+    set(INCLUDES ${INCLUDES} ${Boost_INCLUDE_DIRS})
+    set(DEPLIBS_CXX ${DEBLIBS_CXX} ${Boost_CXX_LIBRARY})
+
+endif()
+
+
 # try to set c++ 11 manually
 set(CMAKE_CXX_FLAGS  "${CMAKE_CXX_FLAGS} -std=c++11")
 
