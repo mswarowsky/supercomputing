@@ -14,9 +14,11 @@
 #include <mpi.h>
 #include <iostream>
 #include <vector>
-#include <boost/numeric/ublas/matrix.hpp>
-#include <boost/numeric/ublas/matrix_proxy.hpp>
-#include <boost/numeric/ublas/io.hpp>
+#include <functional>
+#include <cassert>
+//#include <boost/numeric/ublas/matrix.hpp>
+//#include <boost/numeric/ublas/matrix_proxy.hpp>
+//#include <boost/numeric/ublas/io.hpp>
 
 
 typedef std::vector<std::vector<double>> matrix;
@@ -25,6 +27,7 @@ double one_function(double x, double y);
 matrix create_matrix(size_t rows, size_t columns);
 matrix transpose(const matrix &m);
 void transpose(matrix &t, const matrix &m);
+size_t splittingToChunks(const int &size, const int &rank, const size_t &number);
 
 
 
@@ -35,7 +38,8 @@ extern  "C"{
     void fst_(double *v, int *n, double *w, int *nn);
     void fstinv_(double *v, int *n, double *w, int *nn);
 }
-double poisson(size_t n, const std::function<double(double, double)> &);
+double
+poisson(size_t n, const std::function<double(double, double)> &rhs_function, const int &size, const int &rank);
 
 int main(int argc, char *argv[])
 {
@@ -68,12 +72,15 @@ int main(int argc, char *argv[])
 
 
     //To the work in a separate function to make it testable
-    auto u_max = poisson(n, one_function);
+    auto u_max = poisson(n, one_function, size, rank);
+
+
+    if(rank == 0){      //only 0 should have the full result
+        std::cout << "u_max = " << u_max << std::endl;
+    }
 
     MPI_Finalize();
 
-
-    std::cout << "u_max = " << u_max << std::endl;
 
 
     return 0;
@@ -86,19 +93,29 @@ int main(int argc, char *argv[])
  * @param rhs_function this is the right hand size function that you be used
  * @return aximal value of solution for convergence analysis in L_\infty norm.
  */
-double poisson(const size_t n, const std::function<double(double, double)> &rhs_function){
-    using namespace boost::numeric::ublas;      //otherwise we will get very long lines...
+double
+poisson(const size_t n, const std::function<double(double, double)> &rhs_function, const int &size, const int &rank) {
+//    using namespace boost::numeric::ublas;      //otherwise we will get very long lines...
 
+    size_t points = n + 1;
     size_t m = n - 1;
     double h = 1.0 / n;
+
+    // To some calculation for splitting the data
+    auto chunk_points = splittingToChunks(size, rank, points);
+    size_t points_offset = chunk_points * rank;
+    auto chunk_m = splittingToChunks(size, rank, m);
 
     /*
      * Grid points are generated with constant mesh size on both x- and y-axis.
      */
-    auto grid = std::vector<double>(n+1);
-    for (size_t i = 0; i < grid.size(); i++) {
+    //We need the full grid on every node
+    auto grid = std::vector<double>(chunk_points * size);
+    for (size_t i = points_offset; i < points_offset + chunk_points; i++) {
         grid.at(i) = i * h;
     }
+
+    MPI_Allgather(grid.data() + (points_offset * sizeof(double))  , chunk_points, MPI_DOUBLE, grid.data(), chunk_points, MPI_DOUBLE, MPI_COMM_WORLD);
 
     /*
      * The diagonal of the eigenvalue matrix of T is set with the eigenvalues
@@ -267,4 +284,24 @@ void transpose(matrix &t, const matrix &m){
             t.at(i).at(j) = m.at(j).at(i);
         }
     }
+}
+
+
+/**
+ * Splits a given number into chunks, for the given MPI size and rank
+ * If there is a rest, the chunks will be made so big, that there is a padding for the last node
+ * @param size
+ * @param rank
+ * @param number
+ * @return
+ */
+size_t splittingToChunks(const int &size, const int &rank, const size_t &number){
+    size_t chunk;
+    if((size > 1) && (number % size != 0)){
+        chunk = number / (size - 1);
+    } else {
+        chunk = number / size;
+    }
+    size_t point_offset = rank * chunk;
+    return chunk;
 }

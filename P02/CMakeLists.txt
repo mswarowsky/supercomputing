@@ -6,7 +6,7 @@ enable_language(CXX)
 enable_language(Fortran)
 
 
-set(CMAKE_CXX_STANDARD 11)
+set(CMAKE_CXX_STANDARD 14)
 
 # CMake Options to enable/disable MPI and OpenMP
 option(ENABLE_OPENMP "Enable OpenMP support?" ON)
@@ -74,6 +74,7 @@ add_executable(poisson poisson.cpp)
 
 
 #Add MPI and openMP stuff
+target_link_libraries(poisson common ${DEPLIBS_CXX})
 target_compile_options(poisson PRIVATE ${MPI_CXX_COMPILE_OPTIONS})
 target_compile_definitions(poisson PRIVATE ${MPI_CXX_COMPILE_DEFINITIONS})
 set_target_properties(poisson PROPERTIES LINK_FLAGS ${MPI_CXX_LINK_FLAGS})
@@ -81,5 +82,4 @@ target_compile_options(poisson PRIVATE ${OpenMP_CXX_COMPILE_OPTIONS})
 target_compile_definitions(poisson PRIVATE ${OpenMP_CXX_COMPILE_DEFINITIONS})
 
 
-target_link_libraries(poisson common ${DEPLIBS_CXX})
 set_target_properties(poisson PROPERTIES LINKER_LANGUAGE CXX)
