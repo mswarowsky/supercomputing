@@ -105,6 +105,7 @@ poisson(const size_t n, const std::function<double(double, double)> &rhs_functio
     auto chunk_points = splittingToChunks(size, rank, points);
     size_t points_offset = chunk_points * rank;
     auto chunk_m = splittingToChunks(size, rank, m);
+    size_t m_offset = chunk_m * rank;
 
     /*
      * Grid points are generated with constant mesh size on both x- and y-axis.
@@ -117,17 +118,24 @@ poisson(const size_t n, const std::function<double(double, double)> &rhs_functio
     }
 
     //each sync the computed points so each node has the full grid at the end
-    MPI_Allgather(grid.data() + (points_offset * sizeof(double))  , chunk_points, MPI_DOUBLE, grid.data(), chunk_points, MPI_DOUBLE, MPI_COMM_WORLD);
+    MPI_Allgather(grid.data() + points_offset  , chunk_points, MPI_DOUBLE,grid.data(), chunk_points,
+            MPI_DOUBLE, MPI_COMM_WORLD);
+
 
     /*
      * The diagonal of the eigenvalue matrix of T is set with the eigenvalues
      * defined Chapter 9. page 93 of the Lecture Notes.
      * Note that the indexing starts from zero here, thus i+1.
      */
-    auto diag = std::vector<double>(m);
-    for (size_t i = 0; i < diag.size(); i++) {
+    auto diag = std::vector<double>(chunk_m * size);     //again each node need the full vector so get the full memory on each node
+
+    for(size_t i = m_offset; i < m_offset + chunk_m; i++){
         diag.at(i) = 2.0 * (1.0 - cos((i+1) * M_PI / n));
     }
+
+    MPI_Allgather(diag.data() + m_offset , chunk_m , MPI_DOUBLE, diag.data(), chunk_m, MPI_DOUBLE,
+            MPI_COMM_WORLD);
+
 
     /*
      * Allocate the matrices b and bt which will be used for storing value of
