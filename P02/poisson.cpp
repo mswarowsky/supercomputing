@@ -76,7 +76,7 @@ int main(int argc, char *argv[])
 
 
     if(rank == 0){      //only 0 should have the full result
-        std::cout << "u_max = " << u_max << std::endl;
+        std::cout << "u_max = " << u_max <<  " vs. 0.0727826" << std::endl;
     }
 
     MPI_Finalize();
@@ -111,10 +111,12 @@ poisson(const size_t n, const std::function<double(double, double)> &rhs_functio
      */
     //We need the full grid on every node
     auto grid = std::vector<double>(chunk_points * size);
+    //each node creates a part of the grid
     for (size_t i = points_offset; i < points_offset + chunk_points; i++) {
         grid.at(i) = i * h;
     }
 
+    //each sync the computed points so each node has the full grid at the end
     MPI_Allgather(grid.data() + (points_offset * sizeof(double))  , chunk_points, MPI_DOUBLE, grid.data(), chunk_points, MPI_DOUBLE, MPI_COMM_WORLD);
 
     /*
