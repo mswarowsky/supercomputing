@@ -20,14 +20,13 @@
 //#include <boost/numeric/ublas/matrix_proxy.hpp>
 //#include <boost/numeric/ublas/io.hpp>
 
+#include "Matrix2D.h"
 
-typedef std::vector<std::vector<double>> matrix;
+
 
 double one_function(double x, double y);
-matrix create_matrix(size_t rows, size_t columns);
-matrix transpose(const matrix &m);
-void transpose(matrix &t, const matrix &m);
-size_t splittingToChunks(const int &size, const int &rank, const size_t &number);
+void transpose(Matrix2D<double > &t, Matrix2D<double > &m);
+std::pair<size_t,size_t> splitting(const int &size, const int &rank, const size_t &number);
 
 
 
@@ -102,10 +101,13 @@ poisson(const size_t n, const std::function<double(double, double)> &rhs_functio
     double h = 1.0 / n;
 
     // To some calculation for splitting the data
-    auto chunk_points = splittingToChunks(size, rank, points);
-    size_t points_offset = chunk_points * rank;
-    auto chunk_m = splittingToChunks(size, rank, m);
-    size_t m_offset = chunk_m * rank;
+    auto points_splitting = splitting(size, rank, points);
+    size_t chunk_points = points_splitting.first;
+    size_t points_offset = points_splitting.second;
+    auto m_slitting = splitting(size, rank, m);
+    size_t chunk_m = m_slitting.first;
+    size_t m_offset = m_slitting.second;
+
 
     /*
      * Grid points are generated with constant mesh size on both x- and y-axis.
@@ -118,7 +120,7 @@ poisson(const size_t n, const std::function<double(double, double)> &rhs_functio
     }
 
     //each sync the computed points so each node has the full grid at the end
-    MPI_Allgather(grid.data() + points_offset  , chunk_points, MPI_DOUBLE,grid.data(), chunk_points,
+    MPI_Allgather(grid.data() + points_offset  , chunk_m, MPI_DOUBLE,grid.data(), chunk_m,
             MPI_DOUBLE, MPI_COMM_WORLD);
 
 
@@ -141,9 +143,8 @@ poisson(const size_t n, const std::function<double(double, double)> &rhs_functio
      * Allocate the matrices b and bt which will be used for storing value of
      * G, \tilde G^T, \tilde U^T, U as described in Chapter 9. page 101.
      */
-//    matrix<double> b(m,m);
-    auto b = create_matrix(m, m);
-//    matrix<double> bt(m,m);
+    Matrix2D<double > b(m, m);
+    Matrix2D<double> bt(m,m);
 
     /*
      * This vector will holds coefficients of the Discrete Sine Transform (DST)
@@ -167,9 +168,9 @@ poisson(const size_t n, const std::function<double(double, double)> &rhs_functio
      *
      */
     ///gernerate Data via MPI
-    for (size_t i = 0; i < m; i++) {
+    for(size_t i = m_offset; i < std::min(m_offset + chunk_m, m); i++){
         for (size_t j = 0; j < m; j++) {
-            b.at(i).at(j) =  h * h * rhs_function(grid.at(i+1), grid.at(j+1));
+            b(i,j) = h * h * rhs_function(grid.at(i+1), grid.at(j+1));
         }
     }
 
@@ -188,15 +189,25 @@ poisson(const size_t n, const std::function<double(double, double)> &rhs_functio
      */
     int n_int = static_cast<int>(n);    // int cast for fortan code .... :(
     int nn_int = static_cast<int>(nn);
-    for (size_t i = 0; i < m; i++) {
-        fst_(b.at(i).data() , &n_int, z.data(), &nn_int);
+    for(size_t i = m_offset; i < std::min(m_offset + chunk_m, m); i++){
+            fst_(b.row_ptr(i) , &n_int, z.data(), &nn_int);
     }
-    auto bt = transpose(b);
+
+    MPI_Allgather(b.row_ptr(m_offset) , chunk_m  * m, MPI_DOUBLE, b.base_ptr(), chunk_m * m, MPI_DOUBLE, MPI_COMM_WORLD);
+
+    for (size_t i = 0; i < m; i++) {
+        for (size_t j = 0; j < m; j++) {
+            std::cout << "rank:" << rank << " b[" << i << "][" << j << "]=" << b(i,j) << std::endl;
+        }
+    }
+
+
+    transpose(bt, b);
     /// Do the transpose via MPI
 
     ///
     for (size_t i = 0; i < m; i++) {
-        fstinv_(bt.at(i).data(), &n_int, z.data(), &nn_int);
+        fstinv_(bt.row_ptr(i), &n_int, z.data(), &nn_int);
     }
 
     // bt = \tilde G ^T
@@ -209,7 +220,7 @@ poisson(const size_t n, const std::function<double(double, double)> &rhs_functio
      */
     for (size_t i = 0; i < m; i++) {
         for (size_t j = 0; j < m; j++) {
-            bt.at(i).at(j) = bt.at(i).at(j) / (diag.at(i) + diag.at(j));
+            bt(i,j) = bt(i,j) / (diag.at(i) + diag.at(j));
         }
     }
 
@@ -219,14 +230,14 @@ poisson(const size_t n, const std::function<double(double, double)> &rhs_functio
      * Compute U = S^-1 * (S * U \tilde^T) (Chapter 9. page 101 step 3)
      */
     for (size_t i = 0; i < m; i++) {
-        fst_(bt.at(i).data(), &n_int, z.data(), &nn_int);
+        fst_(bt.row_ptr(i), &n_int, z.data(), &nn_int);
     }
     transpose(b, bt);
     /// Do the transpose via MPI
 
     ///
     for (size_t i = 0; i < m; i++) {
-        fstinv_(b.at(i).data(), &n_int, z.data(), &nn_int);
+        fstinv_(b.row_ptr(i), &n_int, z.data(), &nn_int);
     }
 
 
@@ -237,7 +248,7 @@ poisson(const size_t n, const std::function<double(double, double)> &rhs_functio
     double u_max = 0.0;
     for (size_t i = 0; i < m; i++) {
         for (size_t j = 0; j < m; j++) {
-            u_max = u_max > fabs(b.at(i).at(j)) ? u_max : fabs(b.at(i).at(j));}
+            u_max = u_max > fabs(b(i,j)) ? u_max : fabs(b(i,j));}
     }
 
     ///collect final u_max on rank 0
@@ -256,45 +267,20 @@ double one_function(double x, double y) {
     return 1;
 }
 
-/**
- * Creates a matrix with the given dimentions
- * @param rows
- * @param columns
- * @return
- */
-matrix create_matrix(const size_t rows,const size_t columns){
-    auto m = matrix(rows);
-    for(auto &r : m){
-        r = std::vector<double>(columns);
-    }
-    return m;
-}
-
-/**
- * Create a new transposed matrix of the given one
- * @param m
- * @return transpose of m
- */
-matrix transpose(const matrix &m){
-    assert(m.size() > 0);
-    matrix t = create_matrix(m.at(0).size(), m.size());
-
-    transpose(t, m);
-    return t;
-}
 
 /**
  * Transposes matrix m and saves it in given matrix t
  * @param t OUTPUT the matrix where the transposed matrix m should be stored to
  * @param m INPUT matrix to transposed
  */
-void transpose(matrix &t, const matrix &m){
-    for (size_t i = 0; i < m.at(0).size(); i++) {
-        for (size_t j = 0; j < m.size(); j++) {
-            t.at(i).at(j) = m.at(j).at(i);
+void transpose(Matrix2D<double > &t, Matrix2D<double > &m){
+    for (size_t i = 0; i < m.getColumns(); i++) {
+        for (size_t j = 0; j < m.getRows(); j++) {
+            t(i,j) = m(j,i);
         }
     }
 }
+
 
 
 /**
@@ -305,13 +291,20 @@ void transpose(matrix &t, const matrix &m){
  * @param number
  * @return
  */
-size_t splittingToChunks(const int &size, const int &rank, const size_t &number){
+std::pair<size_t,size_t> splitting(const int &size, const int &rank, const size_t &number){
     size_t chunk;
-    if((size > 1) && (number % size != 0)){
+    size_t offset;
+    if((size > 2) && (number % size != 0)){
         chunk = number / (size - 1);
+        offset = rank * chunk ;
+
+    } else if (size == 2 && (number % size != 0)){
+        chunk = number / 2 + 1;
+        offset = rank * chunk;
     } else {
         chunk = number / size;
+        offset = rank * chunk;
     }
-    size_t point_offset = rank * chunk;
-    return chunk;
+
+    return {chunk, offset};
 }

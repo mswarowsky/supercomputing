@@ -71,7 +71,7 @@ set_target_properties(poisson-c PROPERTIES LINKER_LANGUAGE C)
 
 
 # The C++ based poission application
-add_executable(poisson poisson.cpp)
+add_executable(poisson poisson.cpp Matrix2D.h)
 target_link_libraries(poisson common)
 
 
