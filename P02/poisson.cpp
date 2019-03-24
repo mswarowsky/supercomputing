@@ -26,6 +26,7 @@
 
 double one_function(double x, double y);
 void transpose(Matrix2D<double > &t, Matrix2D<double > &m);
+void MPItranspose(Matrix2D<double > &t, Matrix2D<double > &m);
 std::pair<size_t,size_t> splitting(const int &size, const int &rank, const size_t &number);
 
 
@@ -70,13 +71,84 @@ int main(int argc, char *argv[])
     MPI_Comm_rank(MPI_COMM_WORLD, &rank);
 
 
-    //To the work in a separate function to make it testable
-    auto u_max = poisson(n, one_function, size, rank);
+    Matrix2D<int> test(4,4);
+    Matrix2D<int> test_t(4,4);
 
-
-    if(rank == 0){      //only 0 should have the full result
-        std::cout << "u_max = " << u_max <<  " vs. 0.0727826" << std::endl;
+    int fill = rank * 8;
+    for(int i = rank * 2; i < rank * 2 + 2; i++){
+        for(int y = 0; y < 4;y++ ){
+            test(i,y) = fill;
+            fill++;
+        }
     }
+
+//    if(rank == 0){
+//        for (size_t i = 0; i < 4; i++) {
+//            std::cout << "[ ";
+//            for (size_t j = 0; j < 4; j++) {
+//                std::cout << test(i,j) << " ";
+//            }
+//            std::cout <<"]"<< std::endl;
+//        }
+//    }
+
+    std::vector<int> trans_send_buf(8);
+    int chunk = 2;
+    int offset = rank *  chunk;
+    for(int i = rank * 2; i < rank * 2 + 2; i++){
+        for(int p = 0; p < size; p++){
+            for(int y = 0; y < chunk; y++){
+                trans_send_buf.at(p * 4 + (((i - offset) * chunk) + y)) = test(i, p * chunk + y);
+                if(rank == 0){
+                    std::cout << "(" << p << "," << (i - offset) * chunk + y << ")" << " - (" << i << "," << p * chunk + y << ") - " << p * 4 + ((i - offset) * chunk + y)  << std::endl;
+                }
+            }
+        }
+
+    }
+
+    if(rank == 0){
+        for (size_t i = 0; i < 8; i++) {
+            std::cout << *(trans_send_buf.data() + i) << std::endl;
+        }
+
+    }
+
+    std::vector<int> trans_recv_buf(8);
+    MPI_Alltoall(trans_send_buf.data(), 4, MPI_INT, trans_recv_buf.data(), 4, MPI_INT, MPI_COMM_WORLD );
+
+    MPI_Barrier(MPI_COMM_WORLD);
+    if(rank == 0) std::cout << "----------------------\n";
+    MPI_Barrier(MPI_COMM_WORLD);
+
+//    if(rank == 0){
+//        for (size_t i = 0; i < 2; i++) {
+//            std::cout << "[ ";
+//            for (size_t j = 0; j < 4; j++) {
+//                std::cout << trans_recv(i,j) << " ";
+//            }
+//            std::cout <<"]"<< std::endl;
+//        }
+//    }
+
+//    if(rank == 1){
+//        for (size_t i = 0; i < 4; i++) {
+//            std::cout << "[ ";
+//            for (size_t j = 0; j < 4; j++) {
+//                std::cout << test_t(i,j) << " ";
+//            }
+//            std::cout <<"]"<< std::endl;
+//        }
+//    }
+
+
+    //To the work in a separate function to make it testable
+//    auto u_max = poisson(n, one_function, size, rank);
+//
+//
+//    if(rank == 0){      //only 0 should have the full result
+//        std::cout << "u_max = " << u_max <<  " vs. 0.0727826" << std::endl;
+//    }
 
     MPI_Finalize();
 
@@ -195,11 +267,8 @@ poisson(const size_t n, const std::function<double(double, double)> &rhs_functio
 
     MPI_Allgather(b.row_ptr(m_offset) , chunk_m  * m, MPI_DOUBLE, b.base_ptr(), chunk_m * m, MPI_DOUBLE, MPI_COMM_WORLD);
 
-    for (size_t i = 0; i < m; i++) {
-        for (size_t j = 0; j < m; j++) {
-            std::cout << "rank:" << rank << " b[" << i << "][" << j << "]=" << b(i,j) << std::endl;
-        }
-    }
+
+
 
 
     transpose(bt, b);
@@ -307,4 +376,8 @@ std::pair<size_t,size_t> splitting(const int &size, const int &rank, const size_
     }
 
     return {chunk, offset};
+}
+
+void MPItranspose(Matrix2D<double > &t, Matrix2D<double > &m){
+
 }
