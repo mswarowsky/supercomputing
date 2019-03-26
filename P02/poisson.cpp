@@ -26,7 +26,7 @@
 
 double one_function(double x, double y);
 void transpose(Matrix2D<double > &t, Matrix2D<double > &m);
-void MPI_Transpose(Matrix2D<int > &t,Matrix2D<int > &m, size_t rank, size_t size, size_t chunk, size_t offset);
+void MPI_Transpose(Matrix2D<double > &t,Matrix2D<double > &m, size_t rank, size_t size, size_t chunk, size_t offset);
 std::pair<size_t,size_t> splitting(const int &size, const int &rank, const size_t &number);
 
 
@@ -70,61 +70,13 @@ int main(int argc, char *argv[])
     MPI_Comm_size(MPI_COMM_WORLD, &size);
     MPI_Comm_rank(MPI_COMM_WORLD, &rank);
 
-
-    size_t test_dim = 3;
-    size_t chunk = test_dim/size;
-    size_t offset = rank *  chunk;
-
-    Matrix2D<int> m(test_dim,test_dim);
-    Matrix2D<int> t(test_dim,test_dim);
-
-
-
-    int fill = rank * (test_dim*test_dim/size);
-    for(int i = offset; i < offset + chunk; i++){
-        for(int y = 0; y < test_dim;y++ ){
-            m(i,y) = fill;
-            fill++;
-        }
-    }
-
-    int plotrank = 1;
-
-
-    if(rank == plotrank){
-        for (size_t i = 0; i < test_dim; i++) {
-            std::cout << "[ ";
-            for (size_t j = 0; j < test_dim; j++) {
-                std::cout << m(i,j) << " ";
-            }
-            std::cout <<"]"<< std::endl;
-        }
-    }
-
-
-    MPI_Transpose(t, m, static_cast<size_t>(rank), static_cast<size_t>(size), chunk, offset);
-
-
-    if(rank == plotrank){
-        for (size_t i = 0; i < test_dim; i++) {
-            std::cout << "[ ";
-            for (size_t j = 0; j < test_dim; j++) {
-                std::cout << t(i,j) << " ";
-            }
-            std::cout <<"]"<< std::endl;
-        }
-    }
-
-
-
-
     //To the work in a separate function to make it testable
-//    auto u_max = poisson(n, one_function, size, rank);
-//
-//
-//    if(rank == 0){      //only 0 should have the full result
-//        std::cout << "u_max = " << u_max <<  " vs. 0.0727826" << std::endl;
-//    }
+    auto u_max = poisson(n, one_function, size, rank);
+
+
+    if(rank == 0){      //only 0 should have the full result
+        std::cout << "u_max = " << u_max <<  " vs. 0.0727826" << std::endl;
+    }
 
     MPI_Finalize();
 
@@ -215,7 +167,6 @@ poisson(const size_t n, const std::function<double(double, double)> &rhs_functio
      * Initialize the right hand side data for a given rhs function. We get G
      *
      */
-    ///gernerate Data via MPI
     for(size_t i = m_offset; i < std::min(m_offset + chunk_m, m); i++){
         for (size_t j = 0; j < m; j++) {
             b(i,j) = h * h * rhs_function(grid.at(i+1), grid.at(j+1));
@@ -245,10 +196,14 @@ poisson(const size_t n, const std::function<double(double, double)> &rhs_functio
 
 
 
+    std::cout << "TEST1 " << std::endl;
 
 
-    transpose(bt, b);
+//    transpose(bt, b);
+    MPI_Transpose(bt, b, (size_t) rank, (size_t) size, chunk_m, m_offset);
     /// Do the transpose via MPI
+
+    std::cout << "TEST2 " << std::endl;
 
     ///
     for (size_t i = 0; i < m; i++) {
@@ -354,12 +309,12 @@ std::pair<size_t,size_t> splitting(const int &size, const int &rank, const size_
     return {chunk, offset};
 }
 
-void MPI_Transpose(Matrix2D<int > &t,Matrix2D<int > &m, size_t rank, size_t size, size_t chunk, size_t offset){
+void MPI_Transpose(Matrix2D<double > &t,Matrix2D<double > &m, size_t rank, size_t size, size_t chunk, size_t offset){
 
     auto dim = m.getColumns();
     auto data_per_node = (dim * chunk)/size;
 
-    std::vector<int> trans_send_buf(dim * chunk);
+    std::vector<double > trans_send_buf(dim * chunk);
     for(size_t i = offset; i < offset + chunk; i++){
         for(int p = 0; p < size; p++){
             for(int y = 0; y < chunk; y++){
@@ -368,8 +323,9 @@ void MPI_Transpose(Matrix2D<int > &t,Matrix2D<int > &m, size_t rank, size_t size
         }
     }
 
-    std::vector<int> trans_recv_buf(dim * chunk);
-    MPI_Alltoall(trans_send_buf.data(), data_per_node , MPI_INT, trans_recv_buf.data(), data_per_node, MPI_INT, MPI_COMM_WORLD );
+    std::vector<double > trans_recv_buf(dim * chunk);
+    MPI_Alltoall(trans_send_buf.data(), static_cast<int>(data_per_node), MPI_DOUBLE,
+            trans_recv_buf.data(), static_cast<int>(data_per_node), MPI_DOUBLE, MPI_COMM_WORLD );
 
 
     for(size_t d = 0; d < trans_recv_buf.size(); d++){
