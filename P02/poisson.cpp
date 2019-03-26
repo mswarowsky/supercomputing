@@ -26,7 +26,7 @@
 
 double one_function(double x, double y);
 void transpose(Matrix2D<double > &t, Matrix2D<double > &m);
-void MPItranspose(Matrix2D<double > &t, Matrix2D<double > &m);
+void MPI_Transpose(Matrix2D<int > &t,Matrix2D<int > &m, size_t rank, size_t size, size_t chunk, size_t offset);
 std::pair<size_t,size_t> splitting(const int &size, const int &rank, const size_t &number);
 
 
@@ -71,75 +71,51 @@ int main(int argc, char *argv[])
     MPI_Comm_rank(MPI_COMM_WORLD, &rank);
 
 
-    Matrix2D<int> test(4,4);
-    Matrix2D<int> test_t(4,4);
+    size_t test_dim = 3;
+    size_t chunk = test_dim/size;
+    size_t offset = rank *  chunk;
 
-    int fill = rank * 8;
-    for(int i = rank * 2; i < rank * 2 + 2; i++){
-        for(int y = 0; y < 4;y++ ){
-            test(i,y) = fill;
+    Matrix2D<int> m(test_dim,test_dim);
+    Matrix2D<int> t(test_dim,test_dim);
+
+
+
+    int fill = rank * (test_dim*test_dim/size);
+    for(int i = offset; i < offset + chunk; i++){
+        for(int y = 0; y < test_dim;y++ ){
+            m(i,y) = fill;
             fill++;
         }
     }
 
-//    if(rank == 0){
-//        for (size_t i = 0; i < 4; i++) {
-//            std::cout << "[ ";
-//            for (size_t j = 0; j < 4; j++) {
-//                std::cout << test(i,j) << " ";
-//            }
-//            std::cout <<"]"<< std::endl;
-//        }
-//    }
+    int plotrank = 1;
 
-    std::vector<int> trans_send_buf(8);
-    int chunk = 2;
-    int offset = rank *  chunk;
-    for(int i = rank * 2; i < rank * 2 + 2; i++){
-        for(int p = 0; p < size; p++){
-            for(int y = 0; y < chunk; y++){
-                trans_send_buf.at(p * 4 + (((i - offset) * chunk) + y)) = test(i, p * chunk + y);
-                if(rank == 0){
-                    std::cout << "(" << p << "," << (i - offset) * chunk + y << ")" << " - (" << i << "," << p * chunk + y << ") - " << p * 4 + ((i - offset) * chunk + y)  << std::endl;
-                }
+
+    if(rank == plotrank){
+        for (size_t i = 0; i < test_dim; i++) {
+            std::cout << "[ ";
+            for (size_t j = 0; j < test_dim; j++) {
+                std::cout << m(i,j) << " ";
             }
+            std::cout <<"]"<< std::endl;
         }
-
     }
 
-    if(rank == 0){
-        for (size_t i = 0; i < 8; i++) {
-            std::cout << *(trans_send_buf.data() + i) << std::endl;
-        }
 
+    MPI_Transpose(t, m, static_cast<size_t>(rank), static_cast<size_t>(size), chunk, offset);
+
+
+    if(rank == plotrank){
+        for (size_t i = 0; i < test_dim; i++) {
+            std::cout << "[ ";
+            for (size_t j = 0; j < test_dim; j++) {
+                std::cout << t(i,j) << " ";
+            }
+            std::cout <<"]"<< std::endl;
+        }
     }
 
-    std::vector<int> trans_recv_buf(8);
-    MPI_Alltoall(trans_send_buf.data(), 4, MPI_INT, trans_recv_buf.data(), 4, MPI_INT, MPI_COMM_WORLD );
 
-    MPI_Barrier(MPI_COMM_WORLD);
-    if(rank == 0) std::cout << "----------------------\n";
-    MPI_Barrier(MPI_COMM_WORLD);
-
-//    if(rank == 0){
-//        for (size_t i = 0; i < 2; i++) {
-//            std::cout << "[ ";
-//            for (size_t j = 0; j < 4; j++) {
-//                std::cout << trans_recv(i,j) << " ";
-//            }
-//            std::cout <<"]"<< std::endl;
-//        }
-//    }
-
-//    if(rank == 1){
-//        for (size_t i = 0; i < 4; i++) {
-//            std::cout << "[ ";
-//            for (size_t j = 0; j < 4; j++) {
-//                std::cout << test_t(i,j) << " ";
-//            }
-//            std::cout <<"]"<< std::endl;
-//        }
-//    }
 
 
     //To the work in a separate function to make it testable
@@ -378,6 +354,29 @@ std::pair<size_t,size_t> splitting(const int &size, const int &rank, const size_
     return {chunk, offset};
 }
 
-void MPItranspose(Matrix2D<double > &t, Matrix2D<double > &m){
+void MPI_Transpose(Matrix2D<int > &t,Matrix2D<int > &m, size_t rank, size_t size, size_t chunk, size_t offset){
+
+    auto dim = m.getColumns();
+    auto data_per_node = (dim * chunk)/size;
+
+    std::vector<int> trans_send_buf(dim * chunk);
+    for(size_t i = offset; i < offset + chunk; i++){
+        for(int p = 0; p < size; p++){
+            for(int y = 0; y < chunk; y++){
+                trans_send_buf.at(p * data_per_node + (i - offset) * chunk + y) = m(i, p * chunk + y);
+            }
+        }
+    }
+
+    std::vector<int> trans_recv_buf(dim * chunk);
+    MPI_Alltoall(trans_send_buf.data(), data_per_node , MPI_INT, trans_recv_buf.data(), data_per_node, MPI_INT, MPI_COMM_WORLD );
+
+
+    for(size_t d = 0; d < trans_recv_buf.size(); d++){
+        //calculate row and column extra compile will optimize that ....
+        size_t row = offset + d % chunk;
+        size_t column = d / chunk;
+        t(row, column) = trans_recv_buf.at(d);
+    }
 
 }

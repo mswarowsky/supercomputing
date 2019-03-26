@@ -14,6 +14,10 @@ public:
         return data.data() + i * columns;
     }
     T* base_ptr() {data.data();}
+    /**
+     * The total number of entries
+     * @return rows * columns
+     */
     size_t size() { return data.size();}
     size_t getColumns() { return  columns;}
     size_t getRows() { return rows;}
