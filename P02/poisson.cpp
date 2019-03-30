@@ -29,7 +29,7 @@ void transpose(Matrix2D<double > &t, Matrix2D<double > &m);
 void MPI_Transpose(Matrix2D<double > &t,Matrix2D<double > &m, size_t rank, size_t size, size_t chunk, size_t offset);
 std::pair<size_t,size_t> splitting(const int &size, const int &rank, const size_t &number);
 
-
+#define PLOTRANK 0
 
 // Functions implemented in FORTRAN in fst.f and called from C.
 // The trailing underscore comes from a convention for symbol names, called name
@@ -70,6 +70,44 @@ int main(int argc, char *argv[])
     MPI_Comm_size(MPI_COMM_WORLD, &size);
     MPI_Comm_rank(MPI_COMM_WORLD, &rank);
 
+    size_t test_dim = 5;
+    size_t chunk = splitting(size, rank, test_dim).first;
+    size_t offset = splitting(size, rank, test_dim).second;
+
+    Matrix2D<double> test(test_dim,test_dim);
+    Matrix2D<double> test_T(test_dim,test_dim);
+
+    double fill = rank * (test_dim*test_dim/size);
+    for(int i = offset; i < offset + chunk; i++){
+        for(int y = 0; y < test_dim;y++ ){
+//            test(i,y) = fill;
+            fill++;
+        }
+    }
+//
+//    if(rank == PLOTRANK){
+//        for (size_t i = 0; i < test_dim; i++) {
+//            std::cout << "[ ";
+//            for (size_t j = 0; j < test_dim; j++) {
+//                std::cout << test(i,j) << " ";
+//            }
+//            std::cout <<"]"<< std::endl;
+//        }
+//    }
+
+//    MPI_Transpose(test_T, test, rank, size, chunk, offset);
+
+
+//    if(rank == PLOTRANK){
+//        for (size_t i = 0; i < test_dim; i++) {
+//            std::cout << "[ ";
+//            for (size_t j = 0; j < test_dim; j++) {
+//                std::cout << test_T(i,j) << " ";
+//            }
+//            std::cout <<"]"<< std::endl;
+//        }
+//    }
+
     //To the work in a separate function to make it testable
     auto u_max = poisson(n, one_function, size, rank);
 
@@ -100,28 +138,52 @@ poisson(const size_t n, const std::function<double(double, double)> &rhs_functio
     size_t m = n - 1;
     double h = 1.0 / n;
 
+    auto chunks_points = std::vector<int>(size);
+    auto chunks_m = std::vector<int>(size);
+    auto offsets_points = std::vector<int>(size);
+    auto offsets_m = std::vector<int>(size);
+    std::vector<int> chunks_matrix(size);
+    std::vector<int> offsets_matrix(size);
+
+
+    //Could be done via MPI but probably faster if every node does it local
+    for(int i = 0; i < size;i++){
+        auto points_splitting = splitting(size, i, points);
+        auto m_slitting = splitting(size, i, m);
+
+        chunks_points.at(i) = points_splitting.first;
+        offsets_points.at(i) = points_splitting.second;
+
+        chunks_m.at(i) = m_slitting.first;
+        offsets_m.at(i) = m_slitting.second;
+
+        chunks_matrix.at(i) = m_slitting.first * m;
+        offsets_matrix.at(i) = m_slitting.second * m;
+    }
+
     // To some calculation for splitting the data
-    auto points_splitting = splitting(size, rank, points);
-    size_t chunk_points = points_splitting.first;
-    size_t points_offset = points_splitting.second;
-    auto m_slitting = splitting(size, rank, m);
-    size_t chunk_m = m_slitting.first;
-    size_t m_offset = m_slitting.second;
+    size_t chunk_points = chunks_points.at(rank);
+    size_t points_offset = offsets_points.at(rank);
+    size_t chunk_m = chunks_m.at(rank);
+    size_t m_offset = offsets_m.at(rank);
+
+
 
 
     /*
      * Grid points are generated with constant mesh size on both x- and y-axis.
      */
     //We need the full grid on every node
-    auto grid = std::vector<double>(chunk_points * size);
+    auto grid = std::vector<double>(points);
     //each node creates a part of the grid
     for (size_t i = points_offset; i < points_offset + chunk_points; i++) {
         grid.at(i) = i * h;
     }
 
+
     //each sync the computed points so each node has the full grid at the end
-    MPI_Allgather(grid.data() + points_offset  , chunk_m, MPI_DOUBLE,grid.data(), chunk_m,
-            MPI_DOUBLE, MPI_COMM_WORLD);
+    MPI_Allgatherv(grid.data() + points_offset  , chunk_points, MPI_DOUBLE, grid.data(), chunks_points.data(), offsets_points.data(), MPI_DOUBLE, MPI_COMM_WORLD);
+
 
 
     /*
@@ -129,14 +191,17 @@ poisson(const size_t n, const std::function<double(double, double)> &rhs_functio
      * defined Chapter 9. page 93 of the Lecture Notes.
      * Note that the indexing starts from zero here, thus i+1.
      */
-    auto diag = std::vector<double>(chunk_m * size);     //again each node need the full vector so get the full memory on each node
+    auto diag = std::vector<double>(m);     //again each node need the full vector so get the full memory on each node
 
     for(size_t i = m_offset; i < m_offset + chunk_m; i++){
         diag.at(i) = 2.0 * (1.0 - cos((i+1) * M_PI / n));
     }
 
-    MPI_Allgather(diag.data() + m_offset , chunk_m , MPI_DOUBLE, diag.data(), chunk_m, MPI_DOUBLE,
-            MPI_COMM_WORLD);
+
+
+
+    MPI_Allgatherv(diag.data() + m_offset , chunk_m , MPI_DOUBLE, diag.data(), chunks_m.data(), offsets_m.data(), MPI_DOUBLE, MPI_COMM_WORLD);
+
 
 
     /*
@@ -167,7 +232,7 @@ poisson(const size_t n, const std::function<double(double, double)> &rhs_functio
      * Initialize the right hand side data for a given rhs function. We get G
      *
      */
-    for(size_t i = m_offset; i < std::min(m_offset + chunk_m, m); i++){
+    for(size_t i = m_offset; i < m; i++){
         for (size_t j = 0; j < m; j++) {
             b(i,j) = h * h * rhs_function(grid.at(i+1), grid.at(j+1));
         }
@@ -192,18 +257,20 @@ poisson(const size_t n, const std::function<double(double, double)> &rhs_functio
             fst_(b.row_ptr(i) , &n_int, z.data(), &nn_int);
     }
 
-    MPI_Allgather(b.row_ptr(m_offset) , chunk_m  * m, MPI_DOUBLE, b.base_ptr(), chunk_m * m, MPI_DOUBLE, MPI_COMM_WORLD);
+
+    MPI_Allgatherv(b.row_ptr(m_offset) , chunk_m  * m, MPI_DOUBLE, b.base_ptr(), chunks_matrix.data(), offsets_matrix.data(), MPI_DOUBLE, MPI_COMM_WORLD);
 
 
 
-    std::cout << "TEST1 " << std::endl;
+    std::cout << "r:" << rank << " ";
+    for (auto d: diag) {
+        std::cout << d << ", ";
+    }
+    std::cout << "]" << std::endl;
 
-
-//    transpose(bt, b);
-    MPI_Transpose(bt, b, (size_t) rank, (size_t) size, chunk_m, m_offset);
+    transpose(bt, b);
+//    MPI_Transpose(bt, b, (size_t) rank, (size_t) size, chunk_m, m_offset);
     /// Do the transpose via MPI
-
-    std::cout << "TEST2 " << std::endl;
 
     ///
     for (size_t i = 0; i < m; i++) {
@@ -289,22 +356,29 @@ void transpose(Matrix2D<double > &t, Matrix2D<double > &m){
  * @param size
  * @param rank
  * @param number
- * @return
+ * @return {chunk, offset}
  */
 std::pair<size_t,size_t> splitting(const int &size, const int &rank, const size_t &number){
     size_t chunk;
     size_t offset;
     if((size > 2) && (number % size != 0)){
         chunk = number / (size - 1);
-        offset = rank * chunk ;
 
     } else if (size == 2 && (number % size != 0)){
         chunk = number / 2 + 1;
-        offset = rank * chunk;
     } else {
         chunk = number / size;
-        offset = rank * chunk;
     }
+
+    offset = rank * chunk;
+    //some more special stuff for the last node
+    if(rank == size -1 && offset + chunk > number){
+        chunk = number - offset;
+    }
+
+
+
+    std::cout << "Rank:" << rank << " chunk:" << chunk << " offset:" << offset <<  " of " << number << std::endl;
 
     return {chunk, offset};
 }
@@ -315,18 +389,43 @@ void MPI_Transpose(Matrix2D<double > &t,Matrix2D<double > &m, size_t rank, size_
     auto data_per_node = (dim * chunk)/size;
 
     std::vector<double > trans_send_buf(dim * chunk);
-    for(size_t i = offset; i < offset + chunk; i++){
+    for(size_t i = offset; i < std::min(offset + chunk, m.getRows()); i++){
         for(int p = 0; p < size; p++){
-            for(int y = 0; y < chunk; y++){
-                trans_send_buf.at(p * data_per_node + (i - offset) * chunk + y) = m(i, p * chunk + y);
+            if(p == size -1) {  //spezial stuff for last node
+                int last_chunk = 2;
+                for(int y = 0; y < last_chunk; y++){
+                    std::cout << "(" << i << "," << p * chunk + y << ")=>" << p * data_per_node + (i - offset) * chunk + y << std::endl;
+                    trans_send_buf.at(p * data_per_node + (i - offset) * chunk + y) = m(i, p * chunk + y);
+                }
+            } else {
+                for(int y = 0; y < chunk; y++){
+                    std::cout << "(" << i << "," << p * chunk + y << ")=>" << p * data_per_node + (i - offset) * chunk + y << std::endl;
+                    trans_send_buf.at(p * data_per_node + (i - offset) * chunk + y) = m(i, p * chunk + y);
+                }
             }
         }
+    }
+
+    if(rank == PLOTRANK) {
+        std::cout << "send: [";
+        for (auto d: trans_send_buf) {
+            std::cout << d << ", ";
+        }
+        std::cout << "]" << std::endl;
     }
 
     std::vector<double > trans_recv_buf(dim * chunk);
     MPI_Alltoall(trans_send_buf.data(), static_cast<int>(data_per_node), MPI_DOUBLE,
             trans_recv_buf.data(), static_cast<int>(data_per_node), MPI_DOUBLE, MPI_COMM_WORLD );
 
+
+    if(rank == PLOTRANK) {
+        std::cout << "rescv: [";
+        for (auto d: trans_recv_buf) {
+            std::cout << d << ", ";
+        }
+        std::cout << "]" << std::endl;
+    }
 
     for(size_t d = 0; d < trans_recv_buf.size(); d++){
         //calculate row and column extra compile will optimize that ....
