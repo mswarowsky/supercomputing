@@ -16,6 +16,7 @@
 #include <vector>
 #include <functional>
 #include <cassert>
+#include <numeric>
 //#include <boost/numeric/ublas/matrix.hpp>
 //#include <boost/numeric/ublas/matrix_proxy.hpp>
 //#include <boost/numeric/ublas/io.hpp>
@@ -26,7 +27,7 @@
 
 double one_function(double x, double y);
 void transpose(Matrix2D<double > &t, Matrix2D<double > &m);
-void MPI_Transpose(Matrix2D<double > &t,Matrix2D<double > &m, size_t rank, size_t size, size_t chunk, size_t offset);
+void MPI_Transpose(Matrix2D<double > &t,Matrix2D<double > &m, size_t rank, size_t size, std::vector<int> & chunks, std::vector<int> & offsets);
 std::pair<size_t,size_t> splitting(const int &size, const int &rank, const size_t &number);
 
 #define PLOTRANK 0
@@ -77,36 +78,40 @@ int main(int argc, char *argv[])
     Matrix2D<double> test(test_dim,test_dim);
     Matrix2D<double> test_T(test_dim,test_dim);
 
+    std::vector<int> chunks({3,2});
+    std::vector<int> offsets({0,3});
+
+
     double fill = rank * (test_dim*test_dim/size);
     for(int i = offset; i < offset + chunk; i++){
         for(int y = 0; y < test_dim;y++ ){
-//            test(i,y) = fill;
+            test(i,y) = fill;
             fill++;
         }
     }
-//
-//    if(rank == PLOTRANK){
-//        for (size_t i = 0; i < test_dim; i++) {
-//            std::cout << "[ ";
-//            for (size_t j = 0; j < test_dim; j++) {
-//                std::cout << test(i,j) << " ";
-//            }
-//            std::cout <<"]"<< std::endl;
-//        }
-//    }
 
-//    MPI_Transpose(test_T, test, rank, size, chunk, offset);
+    if(rank == PLOTRANK){
+        for (size_t i = 0; i < test_dim; i++) {
+            std::cout << "[ ";
+            for (size_t j = 0; j < test_dim; j++) {
+                std::cout << test(i,j) << " ";
+            }
+            std::cout <<"]"<< std::endl;
+        }
+    }
+
+    MPI_Transpose(test_T, test, rank, size, chunks, offsets);
 
 
-//    if(rank == PLOTRANK){
-//        for (size_t i = 0; i < test_dim; i++) {
-//            std::cout << "[ ";
-//            for (size_t j = 0; j < test_dim; j++) {
-//                std::cout << test_T(i,j) << " ";
-//            }
-//            std::cout <<"]"<< std::endl;
-//        }
-//    }
+    if(rank == PLOTRANK){
+        for (size_t i = 0; i < test_dim; i++) {
+            std::cout << "[ ";
+            for (size_t j = 0; j < test_dim; j++) {
+                std::cout << test_T(i,j) << " ";
+            }
+            std::cout <<"]"<< std::endl;
+        }
+    }
 
     //To the work in a separate function to make it testable
     auto u_max = poisson(n, one_function, size, rank);
@@ -383,24 +388,31 @@ std::pair<size_t,size_t> splitting(const int &size, const int &rank, const size_
     return {chunk, offset};
 }
 
-void MPI_Transpose(Matrix2D<double > &t,Matrix2D<double > &m, size_t rank, size_t size, size_t chunk, size_t offset){
+void MPI_Transpose(Matrix2D<double > &t,Matrix2D<double > &m, size_t rank, size_t size, std::vector<int > & chunks, std::vector<int> & offsets){
+
+    auto chunk = chunks.at(rank);
+    auto offset = offsets.at(rank);
 
     auto dim = m.getColumns();
-    auto data_per_node = (dim * chunk)/size;
+    std::vector<int> data_per_node(size);
+    for(int i = 0; i < data_per_node.size(); i++){
+        data_per_node.at(i) = chunk * chunks.at(i);
+    }
+
 
     std::vector<double > trans_send_buf(dim * chunk);
-    for(size_t i = offset; i < std::min(offset + chunk, m.getRows()); i++){
+    for(size_t i = offset; i < offset + chunk; i++){
         for(int p = 0; p < size; p++){
             if(p == size -1) {  //spezial stuff for last node
-                int last_chunk = 2;
+                int last_chunk = chunks.back();
                 for(int y = 0; y < last_chunk; y++){
-                    std::cout << "(" << i << "," << p * chunk + y << ")=>" << p * data_per_node + (i - offset) * chunk + y << std::endl;
-                    trans_send_buf.at(p * data_per_node + (i - offset) * chunk + y) = m(i, p * chunk + y);
+//                    std::cout << "(" << i << "," << p * chunk + y << ")=>" << std::accumulate(data_per_node.begin(), data_per_node.begin() + p, 0) + (i - offset) * chunk + y << std::endl;
+                    trans_send_buf.at(std::accumulate(data_per_node.begin(), data_per_node.begin() + p, 0) + (i - offset) * last_chunk + y) = m(i, p * chunk + y);
                 }
             } else {
                 for(int y = 0; y < chunk; y++){
-                    std::cout << "(" << i << "," << p * chunk + y << ")=>" << p * data_per_node + (i - offset) * chunk + y << std::endl;
-                    trans_send_buf.at(p * data_per_node + (i - offset) * chunk + y) = m(i, p * chunk + y);
+//                    std::cout << "(" << i << "," << p * chunk + y << ")=>" << std::accumulate(data_per_node.begin(), data_per_node.begin() + p, 0) + (i - offset) * chunk + y << std::endl;
+                    trans_send_buf.at(std::accumulate(data_per_node.begin(), data_per_node.begin() + p, 0) + (i - offset) * chunk + y) = m(i, p * chunk + y);
                 }
             }
         }
@@ -415,23 +427,23 @@ void MPI_Transpose(Matrix2D<double > &t,Matrix2D<double > &m, size_t rank, size_
     }
 
     std::vector<double > trans_recv_buf(dim * chunk);
-    MPI_Alltoall(trans_send_buf.data(), static_cast<int>(data_per_node), MPI_DOUBLE,
-            trans_recv_buf.data(), static_cast<int>(data_per_node), MPI_DOUBLE, MPI_COMM_WORLD );
+//    MPI_Alltoall(trans_send_buf.data(), static_cast<int>(data_per_node), MPI_DOUBLE,
+//            trans_recv_buf.data(), static_cast<int>(data_per_node), MPI_DOUBLE, MPI_COMM_WORLD );
 
-
-    if(rank == PLOTRANK) {
-        std::cout << "rescv: [";
-        for (auto d: trans_recv_buf) {
-            std::cout << d << ", ";
-        }
-        std::cout << "]" << std::endl;
-    }
-
-    for(size_t d = 0; d < trans_recv_buf.size(); d++){
-        //calculate row and column extra compile will optimize that ....
-        size_t row = offset + d % chunk;
-        size_t column = d / chunk;
-        t(row, column) = trans_recv_buf.at(d);
-    }
+//
+//    if(rank == PLOTRANK) {
+//        std::cout << "rescv: [";
+//        for (auto d: trans_recv_buf) {
+//            std::cout << d << ", ";
+//        }
+//        std::cout << "]" << std::endl;
+//    }
+//
+//    for(size_t d = 0; d < trans_recv_buf.size(); d++){
+//        //calculate row and column extra compile will optimize that ....
+//        size_t row = offset + d % chunk;
+//        size_t column = d / chunk;
+//        t(row, column) = trans_recv_buf.at(d);
+//    }
 
 }
