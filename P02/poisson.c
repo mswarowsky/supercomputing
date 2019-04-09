@@ -161,7 +161,7 @@ int main(int argc, char **argv)
     printf("max error: %f\n", h*h);
     for (size_t i = 0; i < m; i++) {
         for (size_t j = 0; j < m; j++) {
-            if(fabs(b[i][j] - validate_test_function(grid[i + 1], grid[j + 1])) >= (h * h)) {
+            if(fabs(b[i][j] -  validate_test_function(grid[i + 1], grid[j + 1])) >= (h * h)) {
                 printf("shit:(%d,%d) =  %f\n", (int)i, (int)j, fabs(b[i][j] - validate_test_function(grid[i + 1], grid[j + 1])));
                 bad++;
             }
