@@ -18,6 +18,7 @@
 #include <cassert>
 #include <numeric>
 #include <omp.h>
+#include <fstream>
 
 #include "Matrix2D.h"
 
@@ -70,12 +71,23 @@ int main(int argc, char *argv[])
     MPI_Comm_rank(MPI_COMM_WORLD, &rank);
 
 
+    double time_start;
+    if (rank == 0) {
+        time_start = MPI_Wtime();
+    }
+
     //To the work in a separate function to make it testable
     auto u_max = poisson(n, one_function , size, rank);
 
 
+
     if(rank == 0){      //only 0 should have the full result
+        double duration = MPI_Wtime() - time_start;
         std::cout << "u_max = " << u_max <<  " vs. 0.0727826" << std::endl;
+        std::cout << "Time: " << duration << " s" << std::endl;
+        std::fstream outPutFile("poisson.txt", std::ios::app);
+        outPutFile << size << ";" << omp_get_num_threads() << ";" << n <<  ";" << u_max << ";" << duration << "\n";
+        outPutFile.close();
     }
 
     MPI_Finalize();
