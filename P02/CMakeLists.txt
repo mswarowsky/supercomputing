@@ -7,6 +7,7 @@ enable_language(Fortran)
 
 
 set(CMAKE_CXX_STANDARD 11)
+set(CMAKE_C_STANDARD 99)
 # try to set c++ 11 manually
 set(CMAKE_CXX_FLAGS  "${CMAKE_CXX_FLAGS} -std=c++11")
 
