@@ -17,11 +17,15 @@
 #include <functional>
 #include <cassert>
 #include <numeric>
+#include <omp.h>
 
 #include "Matrix2D.h"
 
 
 double one_function(double x, double y);
+double test_function(double x, double y);
+double validate_test_function(double x, double y);
+void poissionTest(Matrix2D<double> & u , std::vector<double> &grid, const size_t n);
 void MPI_Transpose(Matrix2D<double > &t,Matrix2D<double > &m, size_t rank, size_t size, std::vector<int> & chunks, std::vector<int> & offsets);
 std::pair<size_t,size_t> splitting(const int &size, const int &rank, const size_t &number);
 
@@ -67,7 +71,7 @@ int main(int argc, char *argv[])
 
 
     //To the work in a separate function to make it testable
-    auto u_max = poisson(n, one_function, size, rank);
+    auto u_max = poisson(n, one_function , size, rank);
 
 
     if(rank == 0){      //only 0 should have the full result
@@ -183,6 +187,15 @@ poisson(const size_t n, const std::function<double(double, double)> &rhs_functio
         }
     }
 
+    //DEBUG
+//    for(int y = 0; y < m; y++){
+//        std::cout << "[";
+//        for(int x = 0; x < m; x++){
+//            std::cout << b(x,y) << " ,";
+//        }
+//        std::cout << "]" << std::endl;
+//    }
+
 
     /*
      * Step 1
@@ -197,13 +210,14 @@ poisson(const size_t n, const std::function<double(double, double)> &rhs_functio
      */
     int n_int = static_cast<int>(n);    // int cast for fortan code .... :(
     int nn_int = static_cast<int>(nn);
+//#pragma omp parallel for  schedule(static)
     for(size_t i = m_offset; i < m_offset + chunk_m; i++){
             fst_(b.row_ptr(i) , &n_int, z.data(), &nn_int);
     }
 
     MPI_Transpose(bt, b, (size_t) rank, (size_t) size, chunks_m, offsets_m);
 
-    for (size_t i = 0; i < m; i++) {
+    for(size_t i = m_offset; i < m_offset + chunk_m; i++){
         fstinv_(bt.row_ptr(i), &n_int, z.data(), &nn_int);
     }
 
@@ -212,7 +226,7 @@ poisson(const size_t n, const std::function<double(double, double)> &rhs_functio
     /*
      * Solve Lambda * \tilde U = \tilde G (Chapter 9. page 101 step 2)
      */
-    for (size_t i = 0; i < m; i++) {
+    for(size_t i = m_offset; i < m_offset + chunk_m; i++){
         for (size_t j = 0; j < m; j++) {
             bt(i,j) = bt(i,j) / (diag.at(i) + diag.at(j));
         }
@@ -223,19 +237,25 @@ poisson(const size_t n, const std::function<double(double, double)> &rhs_functio
     /*
      * Compute U = S^-1 * (S * U \tilde^T) (Chapter 9. page 101 step 3)
      */
-    for (size_t i = 0; i < m; i++) {
+    for(size_t i = m_offset; i < m_offset + chunk_m; i++){
         fst_(bt.row_ptr(i), &n_int, z.data(), &nn_int);
     }
 
 
     MPI_Transpose(b, bt, (size_t) rank, (size_t) size, chunks_m, offsets_m);
-    for (size_t i = 0; i < m; i++) {
+    for(size_t i = m_offset; i < m_offset + chunk_m; i++){
         fstinv_(b.row_ptr(i), &n_int, z.data(), &nn_int);
     }
 
 
-    //get the matrix to all nodes alternativly just send it to rank 0 but should also not that much slower this way
+    //get the matrix to all nodes alternatively just send it to rank 0 but should also not that much slower this way
     MPI_Allgatherv(b.row_ptr(m_offset) , chunk_m  * m, MPI_DOUBLE, b.base_ptr(), chunks_matrix.data(), offsets_matrix.data(), MPI_DOUBLE, MPI_COMM_WORLD);
+
+
+    ///Temporatry test
+//    if(rank == 0){
+//        poissionTest(b, grid, n);
+//    }
 
     /*
      * Compute maximal value of solution for convergence analysis in L_\infty
@@ -255,6 +275,52 @@ poisson(const size_t n, const std::function<double(double, double)> &rhs_functio
  */
 double one_function(double x, double y) {
     return 1;
+}
+
+/**
+ * Recommended test function from Appendix B.
+ * With this we test the implementation on correctness
+ */
+double test_function(double y, double x) {
+    return 5 * M_PI * M_PI * validate_test_function(y,x);
+
+}
+
+/**
+ *  The validation function for the test function
+ */
+double validate_test_function(double y, double x){
+    return sin(M_PI* x) * sin(2 * M_PI * y);
+}
+
+/**
+ * Unit test for the caculation
+ */
+ void poissionTest(Matrix2D<double> & u , std::vector<double> &grid, const size_t n){
+    double h = 1.0 / n;
+    size_t dimention = n - 1;
+    int bad = 0;
+
+
+    std::cout << "Testing with O(h^2)= " << (h * h) << std::endl;
+
+
+    for(int y = 0; y < dimention; y++ ){
+        for (int x = 0; x < dimention; ++x) {
+            if(fabs(u(y,x) - validate_test_function(grid.at(y+1), grid.at(x+1))) >= (h * h)) {
+                std::cout << "shit:(" << x << "," << y << ") - " <<   fabs(u(y,x) - validate_test_function(grid.at(y+1), grid.at(x+1)))  << std::endl;
+                bad++;
+            }
+
+        }
+    }
+
+    if(bad == 0){
+        std::cout << "Test passed!!" << std::endl;
+    } else {
+        std::cout << "Upppsss something went wrong - " << static_cast<float >(bad) /(dimention * dimention) << std::endl;
+    }
+
 }
 
 /**
@@ -282,7 +348,6 @@ std::pair<size_t,size_t> splitting(const int &size, const int &rank, const size_
     if(rank == size -1 && offset + chunk > number){
         chunk = number - offset;
     }
-//    std::cout << "Rank:" << rank << " chunk:" << chunk << " offset:" << offset <<  " of " << number << std::endl;
     return {chunk, offset};
 }
 

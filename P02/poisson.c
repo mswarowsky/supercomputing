@@ -32,6 +32,14 @@ real one_function(real x, real y);
 void fst_(real *v, int *n, real *w, int *nn);
 void fstinv_(real *v, int *n, real *w, int *nn);
 
+double validate_test_function(double y, double x) {
+    return sin(M_PI * x) * sin(2 * M_PI * y);
+}
+
+double test_function(double y, double x){
+    return 5 * M_PI * M_PI * validate_test_function(y,x);
+}
+
 int main(int argc, char **argv)
 {
     if (argc < 2) {
@@ -105,7 +113,7 @@ int main(int argc, char **argv)
      */
     for (size_t i = 0; i < m; i++) {
         for (size_t j = 0; j < m; j++) {
-            b[i][j] = h * h * one_function(grid[i + 1], grid[j + 1]);
+            b[i][j] = h * h * test_function(grid[i + 1], grid[j + 1]);
         }
     }
 
@@ -147,12 +155,32 @@ int main(int argc, char **argv)
         fstinv_(b[i], &n, z, &nn);
     }
 
+
+    //testing the testing
+    int bad = 0;
+    printf("max error: %f\n", h*h);
+    for (size_t i = 0; i < m; i++) {
+        for (size_t j = 0; j < m; j++) {
+            if(fabs(b[i][j] - validate_test_function(grid[i + 1], grid[j + 1])) >= (h * h)) {
+                printf("shit:(%d,%d) =  %f\n", (int)i, (int)j, fabs(b[i][j] - validate_test_function(grid[i + 1], grid[j + 1])));
+                bad++;
+            }
+        }
+    }
+
+    if(bad == 0){
+        printf("Test passed!!\n");
+    } else {
+        printf("Upppsss something went wrong - %f \n", (float)(bad) /(m * m));
+    }
+
+
     /*
      * Compute maximal value of solution for convergence analysis in L_\infty
      * norm.
      */
     double u_max = 0.0;
-    for (size_t i = 0; i < m; i++) {
+    for(size_t i = 0; i < m; i++) {
         for (size_t j = 0; j < m; j++) {
             u_max = u_max > fabs(b[i][j]) ? u_max : fabs(b[i][j]);
         }
