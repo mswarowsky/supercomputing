@@ -71,7 +71,7 @@ int main(int argc, char *argv[])
 
 
     //To the work in a separate function to make it testable
-    auto u_max = poisson(n, test_function , size, rank);
+    auto u_max = poisson(n, one_function , size, rank);
 
 
     if(rank == 0){      //only 0 should have the full result
@@ -264,9 +264,9 @@ poisson(const size_t n, const std::function<double(double, double)> &rhs_functio
 
 
     ///Temporatry test
-    if(rank == 0){
-        poissionTest(b, grid, n);
-    }
+//    if(rank == 0){
+//        poissionTest(b, grid, n);
+//    }
 
     /*
      * Compute maximal value of solution for convergence analysis in L_\infty
