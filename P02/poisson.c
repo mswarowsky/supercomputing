@@ -33,11 +33,11 @@ void fst_(real *v, int *n, real *w, int *nn);
 void fstinv_(real *v, int *n, real *w, int *nn);
 
 double validate_test_function(double y, double x) {
-    return sin(M_PI * x) * sin(2 * M_PI * y);
+    return sin(PI * x) * sin(2 * PI * y);
 }
 
 double test_function(double y, double x){
-    return 5 * M_PI * M_PI * validate_test_function(y,x);
+    return 5 * PI * PI * validate_test_function(y,x);
 }
 
 int main(int argc, char **argv)
