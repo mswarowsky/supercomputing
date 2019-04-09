@@ -93,8 +93,6 @@ int main(int argc, char *argv[])
  */
 double
 poisson(const size_t n, const std::function<double(double, double)> &rhs_function, const int &size, const int &rank) {
-//    using namespace boost::numeric::ublas;      //otherwise we will get very long lines...
-
     size_t points = n + 1;
     size_t m = n - 1;
     double h = 1.0 / n;
@@ -136,6 +134,7 @@ poisson(const size_t n, const std::function<double(double, double)> &rhs_functio
     //We need the full grid on every node
     auto grid = std::vector<double>(points);
     //each node creates a part of the grid
+#pragma omp parallel for
     for (size_t i = points_offset; i < points_offset + chunk_points; i++) {
         grid.at(i) = i * h;
     }
@@ -148,6 +147,7 @@ poisson(const size_t n, const std::function<double(double, double)> &rhs_functio
      * Note that the indexing starts from zero here, thus i+1.
      */
     auto diag = std::vector<double>(m);     //again each node need the full vector so get the full memory on each node
+#pragma omp parallel for
     for(size_t i = m_offset; i < m_offset + chunk_m; i++){
         diag.at(i) = 2.0 * (1.0 - cos((i+1) * M_PI / n));
     }
@@ -174,13 +174,15 @@ poisson(const size_t n, const std::function<double(double, double)> &rhs_functio
      * doublelocations at each function call.
      */
     size_t nn = 4 * n;
-    auto z = std::vector<double>(nn);
+//    Now needs to be initialized privately for each OpenMP intance
+//    auto z = std::vector<double>(nn);
 
 
     /*
      * Initialize the right hand side data for a given rhs function. We get G
      *
      */
+#pragma omp parallel for
     for(size_t i = m_offset; i < m_offset + chunk_m; i++){
         for (size_t j = 0; j < m; j++) {
             b(i,j) = h * h * rhs_function(grid.at(i+1), grid.at(j+1));
@@ -210,15 +212,18 @@ poisson(const size_t n, const std::function<double(double, double)> &rhs_functio
      */
     int n_int = static_cast<int>(n);    // int cast for fortan code .... :(
     int nn_int = static_cast<int>(nn);
-//#pragma omp parallel for  schedule(static)
+#pragma omp parallel for
     for(size_t i = m_offset; i < m_offset + chunk_m; i++){
-            fst_(b.row_ptr(i) , &n_int, z.data(), &nn_int);
+        auto zz = std::vector<double>(nn);
+        fst_(b.row_ptr(i) , &n_int, zz.data(), &nn_int);
     }
 
     MPI_Transpose(bt, b, (size_t) rank, (size_t) size, chunks_m, offsets_m);
 
+#pragma omp parallel for
     for(size_t i = m_offset; i < m_offset + chunk_m; i++){
-        fstinv_(bt.row_ptr(i), &n_int, z.data(), &nn_int);
+        auto zz = std::vector<double>(nn);
+        fstinv_(bt.row_ptr(i), &n_int, zz.data(), &nn_int);
     }
 
 
@@ -226,6 +231,7 @@ poisson(const size_t n, const std::function<double(double, double)> &rhs_functio
     /*
      * Solve Lambda * \tilde U = \tilde G (Chapter 9. page 101 step 2)
      */
+#pragma omp parallel for
     for(size_t i = m_offset; i < m_offset + chunk_m; i++){
         for (size_t j = 0; j < m; j++) {
             bt(i,j) = bt(i,j) / (diag.at(i) + diag.at(j));
@@ -237,14 +243,19 @@ poisson(const size_t n, const std::function<double(double, double)> &rhs_functio
     /*
      * Compute U = S^-1 * (S * U \tilde^T) (Chapter 9. page 101 step 3)
      */
+#pragma omp parallel for
     for(size_t i = m_offset; i < m_offset + chunk_m; i++){
-        fst_(bt.row_ptr(i), &n_int, z.data(), &nn_int);
+        auto zz = std::vector<double>(nn);
+        fst_(bt.row_ptr(i), &n_int, zz.data(), &nn_int);
     }
 
 
     MPI_Transpose(b, bt, (size_t) rank, (size_t) size, chunks_m, offsets_m);
+
+#pragma omp parallel for
     for(size_t i = m_offset; i < m_offset + chunk_m; i++){
-        fstinv_(b.row_ptr(i), &n_int, z.data(), &nn_int);
+        auto zz = std::vector<double>(nn);
+        fstinv_(b.row_ptr(i), &n_int, zz.data(), &nn_int);
     }
 
 
