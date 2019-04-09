@@ -7,9 +7,11 @@ enable_language(Fortran)
 
 
 set(CMAKE_CXX_STANDARD 11)
-set(CMAKE_C_STANDARD 99)
 # try to set c++ 11 manually
 set(CMAKE_CXX_FLAGS  "${CMAKE_CXX_FLAGS} -std=c++11")
+set(CMAKE_C_STANDARD 99)
+# sadly hast to be done also manually
+set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -std=c99")
 
 # CMake Options to enable/disable MPI and OpenMP
 option(ENABLE_OPENMP "Enable OpenMP support?" ON)
