@@ -22,6 +22,7 @@
 
 #include "Matrix2D.h"
 
+#define PLOTRANK 0
 
 double one_function(double x, double y);
 double test_function(double x, double y);
@@ -29,7 +30,7 @@ double validate_test_function(double x, double y);
 void poissionTest(Matrix2D<double> & u , std::vector<double> &grid, const size_t n);
 void MPI_Transpose(Matrix2D<double > &t,Matrix2D<double > &m, size_t rank, size_t size, std::vector<int> & chunks, std::vector<int> & offsets);
 std::pair<size_t,size_t> splitting(const int &size, const int &rank, const size_t &number);
-
+void transpose(Matrix2D<double > &t, Matrix2D<double > &m);
 
 // Functions implemented in FORTRAN in fst.f and called from C.
 // The trailing underscore comes from a convention for symbol names, called name
@@ -69,6 +70,58 @@ int main(int argc, char *argv[])
     MPI_Init(&argc, &argv);
     MPI_Comm_size(MPI_COMM_WORLD, &size);
     MPI_Comm_rank(MPI_COMM_WORLD, &rank);
+
+    size_t test_dim = 5;
+    size_t chunk = splitting(size, rank, test_dim).first;
+    size_t offset = splitting(size, rank, test_dim).second;
+
+    Matrix2D<double> test(test_dim,test_dim);
+    Matrix2D<double> test_T(test_dim,test_dim);
+    std::vector<int> chunks(size);
+    std::vector<int> offsets(size);
+
+    //Could be done via MPI but probably faster if every node does it local
+    for(int i = 0; i < size;i++){
+        auto split = splitting(size, i, test_dim);
+        chunks.at(i) = split.first;
+        offsets.at(i) = split.second;
+    }
+
+    double fill = std::accumulate(chunks.begin(), chunks.begin() + rank, 0) * test_dim ;
+    for(int i = offset; i < offset + chunk; i++){
+        for(int y = 0; y < test_dim;y++ ){
+            test(i,y) = fill;
+            fill++;
+        }
+    }
+
+    if(rank == PLOTRANK){
+        std::cout << "]" << std::endl;
+        for (size_t i = 0; i < test_dim; i++) {
+            std::cout << "[ ";
+            for (size_t j = 0; j < test_dim; j++) {
+                std::cout << test(i,j) << " ";
+            }
+            std::cout <<"]"<< std::endl;
+        }
+        std::cout << "---" << std::endl;
+    }
+
+    MPI_Transpose(test_T, test, rank, size, chunks, offsets);
+
+
+    if(rank == PLOTRANK){
+        for (size_t i = 0; i < test_dim; i++) {
+            std::cout << "[ ";
+            for (size_t j = 0; j < test_dim; j++) {
+                std::cout << test_T(i,j) << " ";
+            }
+            std::cout <<"]"<< std::endl;
+        }
+    }
+
+
+    if(rank==PLOTRANK) std::cout << "--------------------------------------" << std::endl;
 
 
     double time_start;
@@ -230,6 +283,9 @@ poisson(const size_t n, const std::function<double(double, double)> &rhs_functio
         fst_(b.row_ptr(i) , &n_int, zz.data(), &nn_int);
     }
 
+    //// MPI Transpose
+//    MPI_Allgatherv(b.row_ptr(m_offset) , chunk_m  * m, MPI_DOUBLE, b.base_ptr(), chunks_matrix.data(), offsets_matrix.data(), MPI_DOUBLE, MPI_COMM_WORLD);
+//    transpose(bt, b);
     MPI_Transpose(bt, b, (size_t) rank, (size_t) size, chunks_m, offsets_m);
 
 #pragma omp parallel for
@@ -261,8 +317,10 @@ poisson(const size_t n, const std::function<double(double, double)> &rhs_functio
         fst_(bt.row_ptr(i), &n_int, zz.data(), &nn_int);
     }
 
-
-    MPI_Transpose(b, bt, (size_t) rank, (size_t) size, chunks_m, offsets_m);
+    //// MPI Transpose
+    MPI_Allgatherv(bt.row_ptr(m_offset) , chunk_m  * m, MPI_DOUBLE, bt.base_ptr(), chunks_matrix.data(), offsets_matrix.data(), MPI_DOUBLE, MPI_COMM_WORLD);
+    transpose(b, bt);
+//    MPI_Transpose(b, bt, (size_t) rank, (size_t) size, chunks_m, offsets_m);
 
 #pragma omp parallel for
     for(size_t i = m_offset; i < m_offset + chunk_m; i++){
@@ -279,6 +337,17 @@ poisson(const size_t n, const std::function<double(double, double)> &rhs_functio
 //    if(rank == 0){
 //        poissionTest(b, grid, n);
 //    }
+
+    //DEBUG
+    if(rank == 0){
+        for(int y = 0; y < m; y++){
+            std::cout << "[";
+            for(int x = 0; x < m; x++){
+                std::cout << b(x,y) << " ,";
+            }
+            std::cout << "]" << std::endl;
+        }
+    }
 
     /*
      * Compute maximal value of solution for convergence analysis in L_\infty
@@ -385,7 +454,8 @@ void MPI_Transpose(Matrix2D<double > &t,Matrix2D<double > &m, size_t rank, size_
     offsets_per_node.at(0) = 0;
     for(int i = 0; i < data_per_node.size(); i++){
         data_per_node.at(i) = chunk * chunks.at(i);
-        if(i > 0) offsets_per_node.at(i) = data_per_node.at(i-1);
+        offsets_per_node.at(i) = std::accumulate(data_per_node.begin(), data_per_node.begin() + i, 0);
+//        if(i > 0) offsets_per_node.at(i) = data_per_node.at(i-1);
     }
 
 
@@ -407,6 +477,24 @@ void MPI_Transpose(Matrix2D<double > &t,Matrix2D<double > &m, size_t rank, size_
     MPI_Alltoallv(trans_send_buf.data(), data_per_node.data(), offsets_per_node.data(), MPI_DOUBLE,
             trans_recv_buf.data(), data_per_node.data(), offsets_per_node.data() , MPI_DOUBLE, MPI_COMM_WORLD );
 
+    if(rank == PLOTRANK){
+        std::cout << "data: [";
+        for(auto d : data_per_node){
+            std::cout << d << ",";
+        }
+        std::cout << "]" << std::endl;
+        std::cout << "offset:[";
+        for(auto d: offsets_per_node) {
+            std::cout << d << ",";
+        }
+        std::cout << "]" << std::endl;
+        std::cout << "recv:[";
+        for(auto d : trans_recv_buf){
+            std::cout << d << ",";
+        }
+        std::cout << "]" << std::endl;
+    }
+
     for(size_t d = 0; d < trans_recv_buf.size(); d++){
         //calculate row and column extra compile will optimize that ....
         size_t row = offset + d % chunk;
@@ -414,4 +502,17 @@ void MPI_Transpose(Matrix2D<double > &t,Matrix2D<double > &m, size_t rank, size_
         t(row, column) = trans_recv_buf.at(d);
     }
 
+}
+
+/**
+ * Transposes matrix m and saves it in given matrix t
+ * @param t OUTPUT the matrix where the transposed matrix m should be stored to
+ * @param m INPUT matrix to transposed
+ */
+void transpose(Matrix2D<double > &t, Matrix2D<double > &m){
+    for (size_t i = 0; i < m.getColumns(); i++) {
+        for (size_t j = 0; j < m.getRows(); j++) {
+            t(i,j) = m(j,i);
+        }
+    }
 }
