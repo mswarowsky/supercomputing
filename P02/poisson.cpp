@@ -25,9 +25,9 @@
 #define PLOTRANK 0
 
 double one_function(double x, double y);
-double test_function(double x, double y);
-double validate_test_function(double x, double y);
-void poissionTest(Matrix2D<double> & u , std::vector<double> &grid, const size_t n);
+double test_function(double y, double x);
+double validate_test_function(double y, double x);
+double poissionTest(Matrix2D<double> & u , std::vector<double> &grid, const size_t n);
 void MPI_Transpose(Matrix2D<double > &t,Matrix2D<double > &m, size_t rank, size_t size, std::vector<int> & chunks, std::vector<int> & offsets);
 std::pair<size_t,size_t> splitting(const int &size, const int &rank, const size_t &number);
 
@@ -38,8 +38,8 @@ extern  "C"{
     void fst_(double *v, int *n, double *w, int *nn);
     void fstinv_(double *v, int *n, double *w, int *nn);
 }
-double
-poisson(size_t n, const std::function<double(double, double)> &rhs_function, const int &size, const int &rank);
+
+std::pair<double , double> poisson(size_t n, const std::function<double(double, double)> &rhs_function, const int &size, const int &rank);
 
 int main(int argc, char *argv[])
 {
@@ -75,17 +75,17 @@ int main(int argc, char *argv[])
         time_start = MPI_Wtime();
     }
 
-    //To the work in a separate function to make it testable
-    auto u_max = poisson(n, one_function , size, rank);
+    //maybe the code gets a little bit tidier by a separate function...
+    auto results = poisson(n, test_function , size, rank);
 
 
 
     if(rank == 0){      //only 0 should have the full result
         double duration = MPI_Wtime() - time_start;
-        std::cout << "u_max = " << u_max <<  " vs. 0.0727826" << std::endl;
-        std::cout << "Time: " << duration << " s" << std::endl;
+//        std::cout << "u_max = " << results.first <<  " vs. 0.0727826" << std::endl;
+        std::cout << "Time: " << duration << " s  max error:" <<  results.second  << "   u_max: " << results.first << std::endl;
         std::fstream outPutFile("poisson.txt", std::ios::app);
-        outPutFile << size << ";" << omp_get_num_threads() << ";" << n <<  ";" << u_max << ";" << duration << "\n";
+        outPutFile << size << ";" << omp_get_num_threads() << ";" << n <<  ";" << results.first << ";" << results.second << ";" << duration << "\n";
         outPutFile.close();
     }
 
@@ -99,8 +99,7 @@ int main(int argc, char *argv[])
  * @param rhs_function this is the right hand size function that you be used
  * @return aximal value of solution for convergence analysis in L_\infty norm.
  */
-double
-poisson(const size_t n, const std::function<double(double, double)> &rhs_function, const int &size, const int &rank) {
+std::pair<double , double> poisson(const size_t n, const std::function<double(double, double)> &rhs_function, const int &size, const int &rank) {
     size_t points = n + 1;
     size_t m = n - 1;
     double h = 1.0 / n;
@@ -197,15 +196,6 @@ poisson(const size_t n, const std::function<double(double, double)> &rhs_functio
         }
     }
 
-    //DEBUG
-//    for(int y = 0; y < m; y++){
-//        std::cout << "[";
-//        for(int x = 0; x < m; x++){
-//            std::cout << b(x,y) << " ,";
-//        }
-//        std::cout << "]" << std::endl;
-//    }
-
 
     /*
      * Step 1
@@ -270,21 +260,8 @@ poisson(const size_t n, const std::function<double(double, double)> &rhs_functio
     MPI_Allgatherv(b.row_ptr(m_offset) , chunk_m  * m, MPI_DOUBLE, b.base_ptr(), chunks_matrix.data(), offsets_matrix.data(), MPI_DOUBLE, MPI_COMM_WORLD);
 
 
-    ///Temporatry test
-//    if(rank == 0){
-//        poissionTest(b, grid, n);
-//    }
+    auto max_error = poissionTest(b, grid, n);
 
-    //DEBUG
-//    if(rank == 0){
-//        for(int y = 0; y < m; y++){
-//            std::cout << "[";
-//            for(int x = 0; x < m; x++){
-//                std::cout << b(x,y) << " ,";
-//            }
-//            std::cout << "]" << std::endl;
-//        }
-//    }
 
     /*
      * Compute maximal value of solution for convergence analysis in L_\infty
@@ -295,7 +272,7 @@ poisson(const size_t n, const std::function<double(double, double)> &rhs_functio
         for (size_t j = 0; j < m; j++) {
             u_max = u_max > fabs(b(i,j)) ? u_max : fabs(b(i,j));}
     }
-    return u_max;
+    return {u_max, max_error};
 }
 
 /**
@@ -310,46 +287,34 @@ double one_function(double x, double y) {
  * Recommended test function from Appendix B.
  * With this we test the implementation on correctness
  */
-double test_function(double y, double x) {
+double test_function(double y, double x){
     return 5 * M_PI * M_PI * validate_test_function(y,x);
-
 }
 
 /**
  *  The validation function for the test function
  */
-double validate_test_function(double y, double x){
-    return sin(M_PI* x) * sin(2 * M_PI * y);
+double validate_test_function(double y, double x) {
+    return sin(M_PI * x) * sin(2 * M_PI * y);
 }
 
 /**
  * Unit test for the caculation
  */
- void poissionTest(Matrix2D<double> & u , std::vector<double> &grid, const size_t n){
-    double h = 1.0 / n;
+double poissionTest(Matrix2D<double> & u , std::vector<double> &grid, const size_t n){
     size_t dimention = n - 1;
-    int bad = 0;
-
-
-    std::cout << "Testing with O(h^2)= " << (h * h) << std::endl;
+    double max_error = 0.0;
 
 
     for(int y = 0; y < dimention; y++ ){
         for (int x = 0; x < dimention; ++x) {
-            if(fabs(u(y,x) - validate_test_function(grid.at(y+1), grid.at(x+1))) >= (h * h)) {
-                std::cout << "shit:(" << x << "," << y << ") - " <<   fabs(u(y,x) - validate_test_function(grid.at(y+1), grid.at(x+1)))  << std::endl;
-                bad++;
+            if(fabs(u(y,x) -  validate_test_function(grid[y + 1], grid[x + 1])) > max_error) {
+                max_error = fabs(u(y,x) -  validate_test_function(grid[y + 1], grid[x + 1]));
             }
 
         }
     }
-
-    if(bad == 0){
-        std::cout << "Test passed!!" << std::endl;
-    } else {
-        std::cout << "Upppsss something went wrong - " << static_cast<float >(bad) /(dimention * dimention) << std::endl;
-    }
-
+    return max_error;
 }
 
 /**

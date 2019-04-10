@@ -158,15 +158,16 @@ int main(int argc, char **argv)
 
     //testing the testing
     int bad = 0;
+    real error = 0.0;
     printf("max error: %f\n", h*h);
     for (size_t i = 0; i < m; i++) {
         for (size_t j = 0; j < m; j++) {
-            if(fabs(b[i][j] -  validate_test_function(grid[i + 1], grid[j + 1])) >= (h * h)) {
-                printf("shit:(%d,%d) =  %f\n", (int)i, (int)j, fabs(b[i][j] - validate_test_function(grid[i + 1], grid[j + 1])));
-                bad++;
+            if(fabs(b[i][j] -  validate_test_function(grid[i + 1], grid[j + 1])) > error) {
+                error = fabs(b[i][j] -  validate_test_function(grid[i + 1], grid[j + 1]));
             }
         }
     }
+    printf("errror: %f\n", error);
 
     if(bad == 0){
         printf("Test passed!!\n");
