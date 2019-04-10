@@ -337,11 +337,19 @@ std::pair<size_t,size_t> splitting(const int &size, const int &rank, const size_
         chunk = number / size;
     }
 
+    // If we have more nodes then our problem size just use the furst with a chunk of one
+    if(size > number && rank < number){
+        chunk = 1;
+        offset = rank * chunk;
+    }
+
     offset = rank * chunk;
     //some more special stuff for the last node
     if(rank == size -1 && offset + chunk > number){
         chunk = number - offset;
     }
+
+
     return {chunk, offset};
 }
 
