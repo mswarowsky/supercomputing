@@ -41,7 +41,7 @@ extern  "C"{
     void fstinv_(double *v, int *n, double *w, int *nn);
 }
 
-std::pair<double , double> poisson(size_t n, const std::function<double(double, double)> &rhs_function, const int &size, const int &rank);
+std::pair<double , double> poisson(const size_t n, const std::function<double(double, double)> &rhs_function, const int &size, const int &rank);
 
 int main(int argc, char *argv[])
 {
