@@ -23,8 +23,10 @@
 #include "Matrix2D.h"
 
 #define PLOTRANK 0
+//#define TEST_ //if you use the test_function as rhs function then the max error gets caculated
 
 double one_function(double x, double y);
+double q5_fuctions(double y, double x);
 double test_function(double y, double x);
 double validate_test_function(double y, double x);
 double poissionTest(Matrix2D<double> & u , std::vector<double> &grid, const size_t n);
@@ -76,7 +78,7 @@ int main(int argc, char *argv[])
     }
 
     //maybe the code gets a little bit tidier by a separate function...
-    auto results = poisson(n, test_function , size, rank);
+    auto results = poisson(n, q5_fuctions , size, rank);
 
 
 
@@ -259,9 +261,12 @@ std::pair<double , double> poisson(const size_t n, const std::function<double(do
     //get the matrix to all nodes alternatively just send it to rank 0 but should also not that much slower this way
     MPI_Allgatherv(b.row_ptr(m_offset) , chunk_m  * m, MPI_DOUBLE, b.base_ptr(), chunks_matrix.data(), offsets_matrix.data(), MPI_DOUBLE, MPI_COMM_WORLD);
 
-
+#ifdef TEST_
     auto max_error = poissionTest(b, grid, n);
-
+#endif
+#ifndef TEST_
+    auto max_error = 0.0;
+#endif
 
     /*
      * Compute maximal value of solution for convergence analysis in L_\infty
@@ -281,6 +286,13 @@ std::pair<double , double> poisson(const size_t n, const std::function<double(do
  */
 double one_function(double x, double y) {
     return 1;
+}
+
+/**
+ * This is the fuction asked to used in Question 5
+ */
+double q5_fuctions(double y, double x) {
+    return exp(x) * sin(2 * M_PI * x) * sin(2 * M_PI * y);
 }
 
 /**
